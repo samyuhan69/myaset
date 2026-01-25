@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AsetKu - Portfolio Manager</title>
+
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#121212">
+    <link rel="apple-touch-icon" href="https://ik.imagekit.io/lloll/icon">
+
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        /* --- CSS TAMBAHAN (Responsif & Rapi) --- */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 12px 10px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+            font-size: 0.9rem;
+        }
+
+        table td:first-child,
+        table th:first-child {
+            white-space: nowrap;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        table td:nth-child(3) {
+            white-space: nowrap;
+        }
+
+        .action-cell {
+            white-space: nowrap;
+            text-align: center;
+            min-width: 80px;
+        }
+
+        .btn-mini-action {
+            padding: 5px 8px;
+            font-size: 0.8rem;
+            margin: 0 2px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-edit {
+            background: #ff9800;
+            color: #000;
+        }
+
+        .btn-delete {
+            background: #ff1744;
+            color: #fff;
+        }
+
+        /* Style Khusus Kartu Cloud Sync */
+        .cloud-card {
+            width: 100%;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 15px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* FIX: Agar di HP (Grid Layout) kartu ini mengambil lebar penuh (2 kolom) */
+        @media (max-width: 768px) {
+            .cloud-card {
+                grid-column: 1 / -1;
+                /* Melebar dari kolom 1 sampai akhir */
+            }
+
+            .cloud-actions {
+                flex-direction: column;
+            }
+        }
+
+        .cloud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cloud-title {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-badge-cloud {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: #333;
+            color: #aaa;
+            font-weight: bold;
+        }
+
+        .status-online {
+            background: rgba(0, 200, 83, 0.2);
+            color: #00c853;
+            border: 1px solid #00c853;
+        }
+
+        /* Tombol Logout Kecil */
+        .btn-logout {
+            background: #ff1744;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            display: none;
+            /* Hidden default */
+        }
+
+        .btn-gdrive {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            transition: 0.2s;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+
+        .btn-gdrive:active {
+            transform: scale(0.98);
+        }
+
+        .btn-login-google {
+            background: #4285F4;
+        }
+
+        .btn-login-google:hover {
+            background: #3367D6;
+        }
+
+        .cloud-actions {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .btn-backup {
+            background: #2c3e50;
+            flex: 1;
+            border: 1px solid #444;
+        }
+
+        .btn-restore {
+            background: #00897b;
+            flex: 1;
+            border: 1px solid #00695c;
+        }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+    <div id="pwa-install-banner" class="install-banner">
+        <div class="install-content">
+            <span style="font-size: 1.2rem;">📲</span>
+            <div><strong>Install Aplikasi</strong><span>Akses lebih cepat & offline!</span></div>
+        </div>
+        <div style="display:flex; align-items:center; gap: 10px;">
+            <button onclick="installPWA()" class="btn-install">Install</button>
+            <button onclick="closeInstallBanner()" class="btn-close-banner">&times;</button>
+        </div>
+    </div>
+
+    <div class="header-container">
+        <div>
+            <h2>Aset Saya</h2>
+        </div>
+        <div style="text-align:right;">
+            <div style="display:flex; align-items:center; justify-content:flex-end; gap:10px;">
+                <small style="color:#a0a0a0">Total Kekayaan Bersih</small>
+                <button class="btn-icon" onclick="togglePrivacy()" title="Sensor">👁️</button>
+            </div>
+            <span id="grandTotalDisplay" style="font-size:1.8rem; font-weight:bold; color:#fff;">Rp 0</span>
+            <div style="margin-top: 5px; font-size: 0.85rem; display: flex; gap: 15px; justify-content: flex-end;">
+                <span id="perf-1d" style="color: #666;">Vs Kemarin: -</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="goal-section">
+        <div class="goal-header">
+            <span style="font-size:0.9rem; color:#aaa;">Target Keuangan: <span id="targetLabel"
+                    style="color:#fff; font-weight:bold;">Rp 0</span></span>
+            <button class="btn-tiny" onclick="editGoal()">✏️Target</button>
+        </div>
+        <div class="progress-track">
+            <div id="progressBar" class="progress-fill"></div>
+        </div>
+        <div style="text-align:right; font-size:0.8rem; color:#00c853; margin-top:5px;" id="progressText">0% Tercapai
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="summary-card c-reksa">
+            <h4>Reksadana</h4>
+            <div class="nilai" id="sum-reksa">Rp 0</div>
+            <div class="persen" id="pct-reksa">0%</div>
+        </div>
+        <div class="summary-card c-kas">
+            <h4>Bank</h4>
+            <div class="nilai" id="sum-kas">Rp 0</div>
+            <div class="persen" id="pct-kas">0%</div>
+        </div>
+        <div class="summary-card c-saham">
+            <h4>Saham</h4>
+            <div class="nilai" id="sum-saham">Rp 0</div>
+            <div class="persen" id="pct-saham">0%</div>
+        </div>
+        <div class="summary-card c-komo">
+            <h4>Emas</h4>
+            <div class="nilai" id="sum-komo">Rp 0</div>
+            <div class="persen" id="pct-komo">0%</div>
+        </div>
+        <div class="summary-card c-kripto">
+            <h4>Kripto</h4>
+            <div class="nilai" id="sum-kripto">Rp 0</div>
+            <div class="persen" id="pct-kripto">0%</div>
+        </div>
+    </div>
+
+    <div class="charts-wrapper">
+        <div class="chart-box line-chart-box">
+            <div class="chart-header" style="flex-wrap: wrap; gap: 10px;">
+                <h3 style="margin:0;">📈 Pertumbuhan</h3>
+                <div class="chart-tools" style="flex: 1; justify-content: flex-end; display:flex; gap:5px;">
+                    <input type="month" id="monthPicker" onchange="modeGrafikHarian()"
+                        style="max-width: 130px; background:#121212; border:1px solid #333;" title="Pilih Bulan">
+                </div>
+            </div>
+            <div class="canvas-container"><canvas id="portfolioChart"></canvas></div>
+            <div id="chartInfoLabel" style="text-align:center; font-size:0.8rem; color:#666; margin-top:5px;">Tren
+                Bulanan</div>
+        </div>
+        <div class="chart-box donut-chart-box">
+            <div class="chart-header">
+                <h3>Alokasi Aset</h3>
+            </div>
+            <div class="canvas-container" style="position: relative;"><canvas id="allocationChart"></canvas></div>
+        </div>
+    </div>
+
+    <h3
+        style="margin-top: 30px; margin-bottom: 10px; color: #e0e0e0; border-left: 4px solid #ffca28; padding-left: 10px;">
+        📑 Ringkasan Jenis Aset</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Jenis Aset</th>
+                    <th>Total (Rp)</th>
+                    <th>Porsi</th>
+                    <th>Trend</th>
+                </tr>
+            </thead>
+            <tbody id="subCategoryTableBody"></tbody>
+        </table>
+    </div>
+
+    <div class="action-area" style="flex-wrap: wrap;">
+        <button class="btn-big btn-add" onclick="siapkanTambahAset()">➕ Tambah Aset</button>
+        <button class="btn-big btn-trans" onclick="bukaModal('modalTransaksi')">💸 Transaksi</button>
+
+        <div class="cloud-card">
+            <div class="cloud-header">
+                <div class="cloud-title">☁️ Google Sync</div>
+                <div class="status-container">
+                    <div id="syncStatus" class="status-badge-cloud">Offline</div>
+                    <button id="btnLogout" class="btn-logout" onclick="logoutGoogle()" title="Ganti Akun/Keluar">🚪
+                        Logout</button>
+                </div>
+            </div>
+
+            <button id="gDriveBtn" class="btn-gdrive btn-login-google" onclick="handleGAuth()">
+                <span style="font-size:1.1rem;">G</span> Hubungkan Akun
+            </button>
+
+            <div id="gDriveActions" class="cloud-actions" style="display:none;">
+                <button class="btn-gdrive btn-backup" onclick="uploadToDrive()">
+                    ⬆️ Simpan
+                </button>
+                <button class="btn-gdrive btn-restore" onclick="restoreFromDrive()">
+                    ⬇️ Restore
+                </button>
+            </div>
+            <small style="color:#666; font-size:0.75rem; text-align:center;">
+                *Login tersimpan selama 1 jam. Gunakan tombol Restore saat pindah device.
+            </small>
+        </div>
+    </div>
+
+    <h3 style="margin-bottom: 10px; color: #e0e0e0; border-left: 4px solid #3d5afe; padding-left: 10px;">📋 Rincian
+        Lengkap</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Nama Aset</th>
+                    <th>Kategori</th>
+                    <th>Total Nilai (Rp)</th>
+                    <th>Porsi</th>
+                    <th>Trend</th>
+                    <th>Est. Profit</th>
+                    <th class="action-cell">Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="masterTableBody"></tbody>
+        </table>
+    </div>
+
+    <div class="advanced-section">
+        <div class="advanced-grid">
+            <div class="adv-card">
+                <div class="adv-header">
+                    <h4>⏳ Financial Runway</h4><button class="btn-tiny" onclick="editExpense()">✏️ Set
+                        Pengeluaran</button>
+                </div>
+                <div class="runway-display"><span id="runwayResult"
+                        style="font-size:2rem; font-weight:bold; color:#fff;">- Bulan</span><span id="runwayStatus"
+                        class="status-badge status-gray">Belum diset</span></div>
+                <div style="margin-top:15px; font-size:0.9rem; border-top:1px solid #333; padding-top:10px;">
+                    Pengeluaran/bln: <span id="expenseLabel" style="color:#fff; font-weight:bold;">Rp 0</span></div>
+            </div>
+            <div class="adv-card">
+                <div class="adv-header">
+                    <h4>⚖️ Rebalancing</h4><small id="targetSumLabel" style="color:#888">Total Target: 0%</small>
+                </div>
+                <div class="table-container">
+                    <table class="rebalance-table">
+                        <thead>
+                            <tr>
+                                <th>Kategori</th>
+                                <th width="20%">Target %</th>
+                                <th>Aktual</th>
+                                <th>Saran Aksi (Rp)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rebalanceBody"></tbody>
+                    </table>
+                </div>
+                <div style="text-align:right; margin-top:10px;"><button class="btn-tiny" onclick="resetTargets()">Reset
+                        Target</button></div>
+            </div>
+        </div>
+    </div>
+    <div style="height:50px;"></div>
+
+    <div id="modalTambah" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">➕ Aset Baru</h3><button class="close-btn"
+                    onclick="tutupModal('modalTambah')">&times;</button>
+            </div>
+            <div class="form-group"><label>Kategori Utama</label><select id="inputKategori"
+                    onchange="updateSubKategori()"></select></div>
+            <div class="form-group"><label>Jenis Spesifik</label><select id="inputSubJenis"
+                    onchange="cekModeInput()"></select>
+                <div id="suggestionArea"></div>
+            </div>
+            <div id="toggleBibitContainer" style="display:none; margin-bottom:15px;">
+                <label class="bibit-toggle-card"><input type="checkbox" id="checkAutoBibit" class="bibit-checkbox"
+                        onchange="toggleInputBibit()"><span class="bibit-icon">🌱</span><span
+                        class="bibit-label">Aktifkan Auto Bibit</span></label>
+            </div>
+            <div id="blokInputBibitUrl" class="bibit-input-group hidden">
+                <label style="color:#00c853; font-size:0.85rem;">🔗 Link Produk</label><input type="text"
+                    id="inputUrlBibit" placeholder="https://bibit.id/reksadana/..." style="margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span
+                        style="color:#aaa; font-size:0.8rem;">Status NAV:</span><span id="liveBibitPrice"
+                        style="color:#fff; font-weight:bold; font-size:0.8rem;">Menunggu...</span></div>
+                <label style="color:#e0e0e0; font-size:0.85rem;">Unit Penyertaan:</label><input type="number"
+                    id="inputUnitBibit" placeholder="Contoh: 1500.25">
+            </div>
+            <div class="form-group"><label>Nama Aset</label><input type="text" id="inputNama" placeholder="Nama Aset">
+            </div>
+            <div id="blokInputNormal" class="form-group">
+                <label>Nilai Aset</label>
+                <div style="display: flex; gap: 10px;">
+                    <select id="inputCurrency" style="width: 80px;" onchange="toggleCurrencyMode()">
+                        <option value="IDR">IDR</option>
+                        <option value="USD">USD</option>
+                    </select>
+                    <input type="text" id="inputNilai" placeholder="0" style="flex: 1;">
+                </div>
+                <small id="usdRateLabel" style="color: #ffca28; display: none; margin-top: 5px;">Rate USD: Rp -</small>
+            </div>
+            <div id="blokInputSaham" class="hidden">
+                <div class="input-group-special"
+                    style="background:#0d1b2a; border:1px solid #29b6f6; padding:15px; border-radius:8px;">
+                    <label style="color:#29b6f6; font-weight:bold;">📈 Data Saham (Lot)</label>
+                    <div style="margin-top:10px;"><label style="font-size:0.85rem; color:#ccc;">Kode Saham
+                            (Ticker)</label><input type="text" id="inputTicker" placeholder="Contoh: BBCA"
+                            style="text-transform:uppercase; font-weight:bold; letter-spacing:1px;"></div>
+                    <div style="margin-top:10px;"><label style="font-size:0.85rem; color:#ccc;">Jumlah Lot</label><input
+                            type="number" id="inputLot" placeholder="Contoh: 10"></div>
+                </div>
+            </div>
+            <div id="blokInputEmas" class="hidden">
+                <div class="input-group-special"
+                    style="background:#2a2000; border:1px solid #ffca28; padding:15px; border-radius:8px;">
+                    <label style="color:#ffca28; font-weight:bold;">🏆 Auto Gold Live</label>
+                    <div
+                        style="display:flex; justify-content:space-between; margin:10px 0; border-bottom:1px solid #444; padding-bottom:5px;">
+                        <span style="color:#aaa;">Harga/gram:</span><span id="livePriceLabel"
+                            style="font-weight:bold; color:#fff;">Mencari...</span>
+                    </div>
+                    <label>Berat Emas Kamu (Gram):</label><input type="number" id="inputBeratEmas"
+                        placeholder="Cth: 10, 25">
+                </div>
+            </div>
+            <button id="btnSimpan" class="btn-submit" onclick="simpanAsetBaru()">Simpan Aset</button>
+        </div>
+    </div>
+
+    <div id="modalTransaksi" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔄 Update Saldo</h3><button class="close-btn"
+                    onclick="tutupModal('modalTransaksi')">&times;</button>
+            </div>
+            <div class="form-group"><label>Pilih Aset</label><select id="pilihAsetTransaksi"></select></div>
+            <div class="form-group"><label>Jenis Transaksi</label><select id="jenisTransaksi">
+                    <option value="masuk">🟢 Top Up</option>
+                    <option value="keluar">🔴 Tarik</option>
+                </select></div>
+            <div class="form-group"><label>Jumlah Nominal (Rp)</label><input type="text" id="nominalTransaksi"></div>
+            <button class="btn-submit" style="background:#ff9800; color:#000" onclick="prosesTransaksi()">Simpan
+                Transaksi</button>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
