@@ -4,8 +4,7 @@
 
 Aplikasi ini dibangun dengan pendekatan **Privacy-First**: Tidak ada database server pihak ketiga. Seluruh data keuangan Anda tersimpan aman di **Google Drive** pribadi Anda sendiri.
 
-![Screenshot Aplikasi](https://via.placeholder.com/800x400?text=Preview+Tampilan+AsetKu)
-*(Jangan lupa ganti link gambar ini dengan screenshot asli aplikasimu)*
+<img width="925" height="760" alt="image" src="https://github.com/user-attachments/assets/d05334cc-aaed-48b1-a336-088e88556df4" />
 
 ## ✨ Fitur Utama
 
@@ -46,9 +45,7 @@ Ikuti langkah-langkah berikut untuk menjalankan project ini di komputer Anda:
 
 1.  **Clone Repository**
     ```bash
-    git clone [https://github.com/username-kamu/asetku.git](https://github.com/username-kamu/asetku.git)
-    cd asetku
-    ```
+    git clone https://github.com/samyuhan69/myaset
 
 2.  **Setup Google Cloud Console (Wajib)**
     Agar fitur login & backup berfungsi, Anda perlu kredensial Google:
