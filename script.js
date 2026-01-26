@@ -17,6 +17,12 @@ let pieChart = null;
 let editIndex = -1;
 let isPrivacyMode = localStorage.getItem('privacy_mode') === 'true';
 
+// Cache Token Google
+const STORAGE_KEY = 'gdrive_token_v3';
+let tokenClient;
+let gapiInited = false;
+let gisInited = false;
+
 const dataKategori = {
     'reksa': { label: 'Reksadana', jenis: ['Pasar Uang (RDPU)', 'Pendapatan Tetap (RDPT)', 'Saham (RDS)', 'Campuran', 'SBN Ritel (SBR/ORI)', 'Obligasi Korporasi'] },
     'kas': { label: 'Bank', jenis: ['Bank', 'E-Wallet', 'Deposito', 'Tunai'] },
@@ -276,7 +282,15 @@ function simpanAsetBaru() {
         daftarAset.push(newData);
         showToast("Aset ditambahkan", "success");
     }
-    simpanDataKeStorage(); resetForm(); tutupModal('modalTambah'); updateTampilan();
+
+    // --- AUTO SYNC TRIGGER ---
+    simpanDataKeStorage();
+    resetForm();
+    tutupModal('modalTambah');
+    updateTampilan();
+
+    triggerAutoBackup(); // Upload otomatis
+
     if (customUrl) fetchAllBibitPrices();
     if (tickerInput) { showToast("Mengambil harga saham...", "info"); fetchStockPrice(daftarAset.length - 1, tickerInput); }
 }
@@ -309,7 +323,17 @@ function cekModeInput() {
 // ==========================================
 function bukaModal(id) { document.getElementById(id).style.display = 'flex'; if (id === 'modalTransaksi') updateDropdownAset(); }
 function tutupModal(id) { document.getElementById(id).style.display = 'none'; }
-function hapusAset(index) { if (confirm(`Hapus "${daftarAset[index].nama}"?`)) { daftarAset.splice(index, 1); simpanDataKeStorage(); updateTampilan(); showToast("Aset dihapus", "info"); } }
+
+function hapusAset(index) {
+    if (confirm(`Hapus "${daftarAset[index].nama}"?`)) {
+        daftarAset.splice(index, 1);
+        simpanDataKeStorage();
+        updateTampilan();
+        showToast("Aset dihapus", "info");
+        triggerAutoBackup(); // Upload otomatis
+    }
+}
+
 function showToast(message, type = 'success') { const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = `toast ${type}`; toast.innerHTML = `<span>${message}</span>`; container.appendChild(toast); setTimeout(() => { toast.style.animation = 'fadeOut 0.3s ease-out forwards'; toast.addEventListener('animationend', () => toast.remove()); }, 3000); }
 
 function updateTampilan() {
@@ -394,8 +418,32 @@ function resetTargets() { localStorage.removeItem('target_allocation'); renderRe
 function renderRebalancingTable() { const b = document.getElementById('rebalanceBody'); if (!b) return; let tg = getRebalanceTargets(), tot = daftarAset.reduce((s, i) => s + (i.nilai > 0 ? i.nilai : 0), 0), cS = {}; for (let k in dataKategori) cS[k] = 0; daftarAset.forEach(a => { if (a.nilai > 0 && cS[a.kategori] !== undefined) cS[a.kategori] += a.nilai }); let h = "", tP = 0; for (let k in dataKategori) { let l = dataKategori[k].label, tp = tg[k] || 0; tP += tp; let idl = tot * (tp / 100), act = cS[k] || 0, df = idl - act, acP = tot > 0 ? (act / tot) * 100 : 0; let txt = "-"; if (Math.abs(df) > (tot * 0.01)) { txt = df > 0 ? `<span class="action-buy">BELI (+${formatRupiah(df)})</span>` : `<span class="action-sell">JUAL (${formatRupiah(df)})</span>`; } else txt = `<span class="action-ok">OK</span>`; if (isPrivacyMode && Math.abs(df) > 0) txt = "***"; h += `<tr><td>${l}</td><td><input type="number" class="rebalance-input" value="${tp}" onchange="saveTargetInput('${k}',this.value)">%</td><td>${acP.toFixed(1)}%</td><td>${txt}</td></tr>`; } b.innerHTML = h; document.getElementById('targetSumLabel').innerText = `Total: ${tP}%`; }
 function setupInputMasking() { ['inputNilai', 'nominalTransaksi'].forEach(id => { let el = document.getElementById(id); if (el) { el.type = "text"; el.addEventListener('keyup', function () { let v = this.value.replace(/[^0-9]/g, ''); if (document.getElementById('inputCurrency')?.value === 'USD') { this.value = v; return; } if (v) this.value = new Intl.NumberFormat('id-ID').format(v); }); } }); }
 function cleanRupiah(v) { if (!v) return 0; return parseFloat(v.toString().replace(/\./g, '')); }
-function prosesTransaksi() { let i = document.getElementById('pilihAsetTransaksi').value, t = document.getElementById('jenisTransaksi').value, n = cleanRupiah(document.getElementById('nominalTransaksi').value); if (!daftarAset[i] || isNaN(n) || n <= 0) { showToast("Nominal salah!", "error"); return; } if (t === 'masuk') daftarAset[i].nilai += n; else { if (daftarAset[i].nilai < n) { showToast("Saldo tidak cukup!", "error"); return; } daftarAset[i].nilai -= n; if (daftarAset[i].subJenis === 'Emas Batangan' && daftarAset[i].berat > 0 && hargaEmasLive > 0) daftarAset[i].berat -= (n / hargaEmasLive); if (daftarAset[i].url && daftarAset[i].url.includes('bibit') && daftarAset[i].berat > 0 && daftarAset[i].lastPrice > 0) daftarAset[i].berat -= (n / daftarAset[i].lastPrice); if (daftarAset[i].ticker && daftarAset[i].lastPrice > 0) daftarAset[i].lot -= (n / (daftarAset[i].lastPrice * 100)); } simpanDataKeStorage(); tutupModal('modalTransaksi'); updateTampilan(); showToast("Saldo diperbarui", "success"); }
-function simpanDataKeStorage() { localStorage.setItem('portfolio_assets_v1', JSON.stringify(daftarAset)); }
+
+function prosesTransaksi() {
+    let i = document.getElementById('pilihAsetTransaksi').value, t = document.getElementById('jenisTransaksi').value, n = cleanRupiah(document.getElementById('nominalTransaksi').value);
+    if (!daftarAset[i] || isNaN(n) || n <= 0) { showToast("Nominal salah!", "error"); return; }
+    if (t === 'masuk') daftarAset[i].nilai += n;
+    else {
+        if (daftarAset[i].nilai < n) { showToast("Saldo tidak cukup!", "error"); return; }
+        daftarAset[i].nilai -= n;
+        if (daftarAset[i].subJenis === 'Emas Batangan' && daftarAset[i].berat > 0 && hargaEmasLive > 0) daftarAset[i].berat -= (n / hargaEmasLive);
+        if (daftarAset[i].url && daftarAset[i].url.includes('bibit') && daftarAset[i].berat > 0 && daftarAset[i].lastPrice > 0) daftarAset[i].berat -= (n / daftarAset[i].lastPrice);
+        if (daftarAset[i].ticker && daftarAset[i].lastPrice > 0) daftarAset[i].lot -= (n / (daftarAset[i].lastPrice * 100));
+    }
+    simpanDataKeStorage();
+    tutupModal('modalTransaksi');
+    updateTampilan();
+    showToast("Saldo diperbarui", "success");
+    // AUTO BACKUP SETELAH TRANSAKSI
+    triggerAutoBackup();
+}
+
+// Update Local Data with Timestamp for Smart Sync
+function simpanDataKeStorage() {
+    localStorage.setItem('portfolio_assets_v1', JSON.stringify(daftarAset));
+    localStorage.setItem('local_last_updated', new Date().toISOString()); // NEW: Track last local edit
+}
+
 function loadDataAset() { const d = localStorage.getItem('portfolio_assets_v1'); if (d) { try { daftarAset = JSON.parse(d); let u = false; daftarAset.forEach(a => { if (!dataKategori[a.kategori]) { a.kategori = 'reksa'; u = true } }); if (u) simpanDataKeStorage(); updateTampilan(); } catch (e) { } } }
 function simpanHistoryHarian(t) { const d = getWIBDateString(); let h = JSON.parse(localStorage.getItem('portfolio_history')) || [], i = h.findIndex(x => x.date === d), s = {}; daftarAset.forEach(a => { if (a.nilai > 0) s[a.id] = a.nilai; }); if (i >= 0) { h[i].total = t; h[i].details = s; } else h.push({ date: d, total: t, details: s }); h.sort((a, b) => new Date(a.date) - new Date(b.date)); localStorage.setItem('portfolio_history', JSON.stringify(h)); hitungPerformaGlobal(t, h); if (!document.getElementById('monthPicker').value) renderLineChart(); }
 function hitungPerformaGlobal(c, h) { if (h.length < 2) return; const t = getWIBDateString(), i = h.findIndex(x => x.date === t), p = i - 1; if (p >= 0) { let d = c - h[p].total, pc = (d / h[p].total) * 100, cl = d >= 0 ? '#00c853' : '#ff1744', ic = d >= 0 ? '▲' : '▼'; document.getElementById('perf-1d').innerHTML = `Vs Kemarin: <span style="color:${cl};font-weight:bold;">${ic} ${pc.toFixed(2)}%</span>`; } }
@@ -408,36 +456,29 @@ function updateDropdownAset() { let el = document.getElementById('pilihAsetTrans
 
 
 // ==========================================
-// 4. GOOGLE DRIVE ENGINE (SMART SESSION V3)
+// 4. GOOGLE DRIVE ENGINE (SMART AUTO-SYNC)
 // ==========================================
-let tokenClient;
-let gapiInited = false;
-let gisInited = false;
-let pendingAction = null; // Menyimpan aksi yang tertunda (upload/restore)
-
-// Kunci penyimpanan token
-const STORAGE_KEY = 'gdrive_token_v3';
+let pendingAction = null;
 
 function initGoogleDrive() {
     if (typeof gapi !== 'undefined' && typeof google !== 'undefined') {
         gapi.load('client', async () => {
             await gapi.client.init({ apiKey: G_API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
             gapiInited = true;
-
-            // Cek apakah user sebelumnya sudah login?
             if (localStorage.getItem(STORAGE_KEY)) {
-                // Jangan cek expired date dulu, langsung set "Online" agar user senang
                 updateUISignedIn();
-                console.log("Restored session (UI Only).");
+                console.log("Session restored. Checking sync...");
+                // START SMART SYNC SAAT BUKA APLIKASI
+                smartSyncOnLoad();
             } else {
-                checkAuthStatus(); // UI Offline
+                checkAuthStatus();
             }
         });
 
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: G_CLIENT_ID,
             scope: "https://www.googleapis.com/auth/drive.file",
-            callback: handleTokenResponse // Callback dipisah agar lebih rapi
+            callback: handleTokenResponse
         });
         gisInited = true;
     } else {
@@ -445,28 +486,23 @@ function initGoogleDrive() {
     }
 }
 
-// Callback saat Google memberikan token baru
 function handleTokenResponse(resp) {
-    if (resp.error) { showToast("Gagal Refresh Token", "error"); pendingAction = null; return; }
+    if (resp.error) { showToast("Gagal Login", "error"); return; }
 
-    // Simpan Token Baru
-    const expiresInSeconds = resp.expires_in || 3599;
-    const expireTime = Date.now() + (expiresInSeconds * 1000);
-
-    const tokenData = { access_token: resp.access_token, expires_at: expireTime };
+    const tokenData = {
+        access_token: resp.access_token,
+        expires_at: Date.now() + ((resp.expires_in || 3599) * 1000)
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tokenData));
-
-    // Set ke GAPI
     gapi.client.setToken({ access_token: resp.access_token });
     updateUISignedIn();
 
-    // JIKA ADA AKSI TERTUNDA, JALANKAN SEKARANG!
-    if (pendingAction === 'upload') {
-        uploadToDriveActual();
-    } else if (pendingAction === 'restore') {
-        restoreFromDriveActual();
-    }
-    pendingAction = null; // Reset
+    // JIKA USER BARU LOGIN MANUAL -> LAKUKAN SMART SYNC
+    if (pendingAction === 'upload') uploadToDriveActual(true);
+    else if (pendingAction === 'restore') restoreFromDriveActual(true);
+    else smartSyncOnLoad(); // Cek mana yang lebih baru (Cloud vs Local)
+
+    pendingAction = null;
 }
 
 function checkAuthStatus() {
@@ -477,84 +513,116 @@ function checkAuthStatus() {
     }
 }
 
-// Tombol Login Manual
 function handleGAuth() {
-    if (!gisInited) { showToast("Koneksi Google belum siap.", "error"); return; }
-    // Minta consent agar user bisa pilih akun
+    if (!gisInited) { showToast("Koneksi belum siap.", "error"); return; }
     tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
 function updateUISignedIn() {
     document.getElementById('gDriveBtn').style.display = 'none';
-    document.getElementById('gDriveActions').style.display = 'flex';
-    document.getElementById('btnLogout').style.display = 'inline-block';
-
+    document.getElementById('btnLogout').style.display = 'block';
     const status = document.getElementById('syncStatus');
-    status.innerText = "Online";
-    status.classList.add('status-online');
+    status.innerText = "ONLINE";
+    status.classList.add('status-active');
 }
 
 function logoutGoogle() {
-    // Hapus semua jejak login
     gapi.client.setToken(null);
     localStorage.removeItem(STORAGE_KEY);
-
-    // Reset UI
     document.getElementById('gDriveBtn').style.display = 'flex';
     document.getElementById('gDriveBtn').innerHTML = '<span style="font-size:1.1rem;">G</span> Hubungkan Akun';
-    document.getElementById('gDriveActions').style.display = 'none';
     document.getElementById('btnLogout').style.display = 'none';
-
     const status = document.getElementById('syncStatus');
-    status.innerText = "Offline";
-    status.classList.remove('status-online');
-
-    showToast("Berhasil Logout", "info");
+    status.innerText = "OFFLINE";
+    status.classList.remove('status-active');
+    showToast("Logout Berhasil", "info");
 }
 
-// --- FUNGSI PINTAR: CEK TOKEN SEBELUM AKSI ---
-function executeWithAuth(actionName) {
-    const stored = localStorage.getItem(STORAGE_KEY);
+function triggerAutoBackup() {
+    // Dipanggil setiap kali user edit data
+    if (localStorage.getItem(STORAGE_KEY)) {
+        uploadToDrive(true); // true = silent mode (gak perlu popup toast lebay)
+    }
+}
 
-    // 1. Jika belum pernah login sama sekali -> Suruh login
-    if (!stored) {
-        showToast("Silakan login dulu", "info");
+// --- LOGIKA SMART SYNC (The Brain) ---
+async function smartSyncOnLoad() {
+    executeWithAuth('sync');
+}
+
+async function performSmartSync() {
+    // 1. Ambil info file di Cloud
+    const fileId = await findFileId(G_FILENAME);
+    if (!fileId) {
+        // Cloud kosong? Upload data lokal sekarang
+        if (daftarAset.length > 0) uploadToDriveActual(true);
         return;
     }
 
-    const tokenData = JSON.parse(stored);
-    const now = Date.now();
+    // 2. Cek Metadata Cloud
+    const res = await gapi.client.drive.files.get({ fileId: fileId, fields: 'createdTime, modifiedTime' });
 
-    // 2. Cek apakah token expired? (Beri buffer 1 menit)
-    if (tokenData.expires_at < (now + 60000)) {
-        // TOKEN BASI -> MINTA BARU DIAM-DIAM
-        console.log("Token expired. Refreshing...");
-        showToast("Menyegarkan sesi...", "info");
+    // Download isi untuk cek timestamp internal kita
+    const contentRes = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
+    const cloudData = contentRes.result;
 
-        pendingAction = actionName; // Ingat apa yang mau dilakukan user
+    const cloudTime = new Date(cloudData.last_synced || 0).getTime();
+    const localTimeStr = localStorage.getItem('local_last_updated');
+    const localTime = localTimeStr ? new Date(localTimeStr).getTime() : 0;
 
-        // PENTING: prompt '' agar tidak minta izin ulang jika session browser masih aktif
-        tokenClient.requestAccessToken({ prompt: '' });
+    console.log("Cloud Time:", new Date(cloudTime).toLocaleString());
+    console.log("Local Time:", new Date(localTime).toLocaleString());
+
+    // 3. BANDINGKAN
+    if (cloudTime > localTime) {
+        // Cloud LEBIH BARU -> Restore ke HP (Tanpa tanya, karena user minta otomatis)
+        showToast("Sinkronisasi: Mengambil data terbaru...", "info");
+        localStorage.setItem('portfolio_assets_v1', cloudData.assets);
+        localStorage.setItem('portfolio_history', cloudData.history);
+        localStorage.setItem('local_last_updated', cloudData.last_synced); // Samakan waktu
+        setTimeout(() => location.reload(), 1000);
+    } else if (localTime > cloudTime) {
+        // HP LEBIH BARU -> Upload ke Cloud
+        console.log("Local newer. Uploading...");
+        uploadToDriveActual(true);
     } else {
-        // TOKEN AMAN -> LANJUT
-        gapi.client.setToken({ access_token: tokenData.access_token });
-        if (actionName === 'upload') uploadToDriveActual();
-        if (actionName === 'restore') restoreFromDriveActual();
+        console.log("Data sudah sinkron.");
     }
 }
 
-// Wrapper untuk Tombol
-function uploadToDrive() { executeWithAuth('upload'); }
-function restoreFromDrive() { executeWithAuth('restore'); }
+// --- WRAPPERS ---
+function executeWithAuth(actionName, isSilent = false) {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return; // Belum login, abaikan auto-sync
 
-// --- LOGIC INTI UPLOAD & RESTORE ---
+    const tokenData = JSON.parse(stored);
+    if (tokenData.expires_at < (Date.now() + 60000)) {
+        if (!isSilent) showToast("Menyegarkan sesi...", "info");
+        pendingAction = actionName;
+        tokenClient.requestAccessToken({ prompt: '' });
+    } else {
+        gapi.client.setToken({ access_token: tokenData.access_token });
+        if (actionName === 'upload') uploadToDriveActual(isSilent);
+        if (actionName === 'restore') restoreFromDriveActual(isSilent);
+        if (actionName === 'sync') performSmartSync();
+    }
+}
 
-async function uploadToDriveActual() {
-    showToast("Mengupload data...", "info");
+function uploadToDrive(silent = false) { executeWithAuth('upload', silent); }
+function restoreFromDrive(silent = false) { executeWithAuth('restore', silent); }
+
+// --- CORE ACTIONS ---
+async function uploadToDriveActual(silent) {
+    if (!silent) showToast("Mengupload data...", "info");
+    const syncTime = new Date().toISOString();
+
+    // Simpan timestamp sync ini juga ke lokal agar sinkron
+    localStorage.setItem('local_last_updated', syncTime);
+
     const content = JSON.stringify({
         assets: localStorage.getItem('portfolio_assets_v1'),
         history: localStorage.getItem('portfolio_history'),
-        last_synced: new Date().toISOString()
+        last_synced: syncTime
     });
 
     const fileMetadata = { 'name': G_FILENAME, 'mimeType': 'application/json' };
@@ -562,54 +630,49 @@ async function uploadToDriveActual() {
 
     try {
         const existingId = await findFileId(G_FILENAME);
-        if (existingId) {
-            await updateFileGoogle(existingId, fileBlob);
-            showToast("Backup Diperbarui di Cloud!", "success");
-        } else {
-            await createFileGoogle(fileMetadata, fileBlob);
-            showToast("Backup Baru Dibuat di Cloud!", "success");
+        if (existingId) { await updateFileGoogle(existingId, fileBlob); }
+        else { await createFileGoogle(fileMetadata, fileBlob); }
+
+        if (!silent) showToast("Tersimpan di Cloud!", "success");
+        else {
+            const stat = document.getElementById('syncStatus');
+            if (stat) {
+                stat.innerText = "TERSIMPAN";
+                setTimeout(() => { stat.innerText = "ONLINE"; }, 3000);
+            }
         }
     } catch (err) {
         console.error(err);
-        // Jika error 401 (Unauthorized), coba paksa login ulang
-        if (err.status === 401) {
-            showToast("Sesi tidak valid. Login ulang...", "error");
-            pendingAction = 'upload';
-            tokenClient.requestAccessToken({ prompt: 'select_account' });
-        } else {
-            showToast("Gagal Upload: " + (err.result?.error?.message || "Error"), "error");
-        }
+        if (err.status === 401) { pendingAction = 'upload'; tokenClient.requestAccessToken({ prompt: '' }); }
+        else if (!silent) showToast("Gagal Upload", "error");
     }
 }
 
-async function restoreFromDriveActual() {
-    showToast("Mencari backup...", "info");
+async function restoreFromDriveActual(silent) {
+    if (!silent) showToast("Mencari backup...", "info");
     try {
         const fileId = await findFileId(G_FILENAME);
-        if (!fileId) { showToast("Tidak ada backup ditemukan.", "error"); return; }
+        if (!fileId) { if (!silent) showToast("Tidak ada backup.", "error"); return; }
 
         const res = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
         const data = res.result;
 
-        if (confirm(`Backup ditemukan! (Tanggal: ${data.last_synced || '?'}).\nTimpa data lokal?`)) {
-            if (data.assets) localStorage.setItem('portfolio_assets_v1', data.assets);
-            if (data.history) localStorage.setItem('portfolio_history', data.history);
-            showToast("Restore Berhasil! Memuat ulang...", "success");
-            setTimeout(() => location.reload(), 1500);
-        }
+        // Langsung timpa (karena ini dipanggil manual atau via smart sync logika)
+        localStorage.setItem('portfolio_assets_v1', data.assets);
+        localStorage.setItem('portfolio_history', data.history);
+        localStorage.setItem('local_last_updated', data.last_synced);
+
+        if (!silent) showToast("Restore Berhasil!", "success");
+        setTimeout(() => location.reload(), 1000);
+
     } catch (err) {
         console.error(err);
-        if (err.status === 401) {
-            showToast("Sesi tidak valid. Login ulang...", "error");
-            pendingAction = 'restore';
-            tokenClient.requestAccessToken({ prompt: 'select_account' });
-        } else {
-            showToast("Gagal Restore", "error");
-        }
+        if (err.status === 401) { pendingAction = 'restore'; tokenClient.requestAccessToken({ prompt: '' }); }
+        else if (!silent) showToast("Gagal Restore", "error");
     }
 }
 
-// Helpers API
+// Helpers
 async function findFileId(name) {
     const res = await gapi.client.drive.files.list({ q: `name = '${name}' and trashed = false`, fields: 'files(id, name)', spaces: 'drive' });
     return (res.result.files && res.result.files.length > 0) ? res.result.files[0].id : null;
