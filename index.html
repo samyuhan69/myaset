@@ -73,7 +73,7 @@
             color: #fff;
         }
 
-        /* Style Khusus Kartu Cloud Sync */
+        /* --- Style Khusus Kartu Cloud Sync (BARU) --- */
         .cloud-card {
             width: 100%;
             background: #1e1e1e;
@@ -85,24 +85,23 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+            position: relative;
+            /* Untuk positioning */
         }
 
-        /* FIX: Agar di HP (Grid Layout) kartu ini mengambil lebar penuh (2 kolom) */
+        /* Di HP kartu melebar penuh */
         @media (max-width: 768px) {
             .cloud-card {
                 grid-column: 1 / -1;
-                /* Melebar dari kolom 1 sampai akhir */
-            }
-
-            .cloud-actions {
-                flex-direction: column;
             }
         }
 
         .cloud-header {
             display: flex;
             justify-content: space-between;
+            /* Judul kiri, Status kanan */
             align-items: center;
+            width: 100%;
         }
 
         .cloud-title {
@@ -114,40 +113,48 @@
             gap: 8px;
         }
 
-        .status-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        /* Status Text (Tanpa Icon Bulat) */
+        .status-text {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .status-badge-cloud {
-            font-size: 0.75rem;
-            padding: 4px 10px;
-            border-radius: 20px;
-            background: #333;
-            color: #aaa;
-            font-weight: bold;
-        }
-
-        .status-online {
-            background: rgba(0, 200, 83, 0.2);
+        /* Warna status saat online */
+        .status-active {
             color: #00c853;
-            border: 1px solid #00c853;
+            /* Hijau teks */
+            text-shadow: 0 0 10px rgba(0, 200, 83, 0.3);
+            /* Sedikit glow */
         }
 
-        /* Tombol Logout Kecil */
+        /* Tombol Logout (Di Bawah Center) */
         .btn-logout {
-            background: #ff1744;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 4px 8px;
-            font-size: 0.7rem;
+            background: #1e1e1e;
+            /* Warna dasar gelap */
+            color: #ef5350;
+            /* Merah soft */
+            border: 1px solid #ef5350;
+            border-radius: 20px;
+            padding: 8px 20px;
+            font-size: 0.8rem;
             cursor: pointer;
+            margin: 5px auto 0 auto;
+            /* Margin auto kiri-kanan agar center */
             display: none;
-            /* Hidden default */
+            /* Hidden by default */
+            width: fit-content;
+            transition: all 0.2s;
         }
 
+        .btn-logout:active {
+            background: #ef5350;
+            color: #fff;
+        }
+
+        /* Tombol Login Besar */
         .btn-gdrive {
             width: 100%;
             padding: 12px;
@@ -174,24 +181,6 @@
 
         .btn-login-google:hover {
             background: #3367D6;
-        }
-
-        .cloud-actions {
-            display: flex;
-            gap: 10px;
-            width: 100%;
-        }
-
-        .btn-backup {
-            background: #2c3e50;
-            flex: 1;
-            border: 1px solid #444;
-        }
-
-        .btn-restore {
-            background: #00897b;
-            flex: 1;
-            border: 1px solid #00695c;
         }
     </style>
 
@@ -312,29 +301,21 @@
 
         <div class="cloud-card">
             <div class="cloud-header">
-                <div class="cloud-title">☁️ Google Sync</div>
-                <div class="status-container">
-                    <div id="syncStatus" class="status-badge-cloud">Offline</div>
-                    <button id="btnLogout" class="btn-logout" onclick="logoutGoogle()" title="Ganti Akun/Keluar">🚪
-                        Logout</button>
-                </div>
+                <div class="cloud-title">☁️ Auto-Sync Google</div>
+                <div id="syncStatus" class="status-text">OFFLINE</div>
             </div>
 
             <button id="gDriveBtn" class="btn-gdrive btn-login-google" onclick="handleGAuth()">
                 <span style="font-size:1.1rem;">G</span> Hubungkan Akun
             </button>
 
-            <div id="gDriveActions" class="cloud-actions" style="display:none;">
-                <button class="btn-gdrive btn-backup" onclick="uploadToDrive()">
-                    ⬆️ Simpan
-                </button>
-                <button class="btn-gdrive btn-restore" onclick="restoreFromDrive()">
-                    ⬇️ Restore
-                </button>
-            </div>
-            <small style="color:#666; font-size:0.75rem; text-align:center;">
-                *Login tersimpan selama 1 jam. Gunakan tombol Restore saat pindah device.
+            <small style="color:#666; font-size:0.75rem; text-align:center; margin-top:5px;">
+                *Data otomatis dibackup ke Google Drive Anda.
             </small>
+
+            <button id="btnLogout" class="btn-logout" onclick="logoutGoogle()">
+                🚪 Keluar Akun
+            </button>
         </div>
     </div>
 
@@ -451,8 +432,7 @@
                     <div
                         style="display:flex; justify-content:space-between; margin:10px 0; border-bottom:1px solid #444; padding-bottom:5px;">
                         <span style="color:#aaa;">Harga/gram:</span><span id="livePriceLabel"
-                            style="font-weight:bold; color:#fff;">Mencari...</span>
-                    </div>
+                            style="font-weight:bold; color:#fff;">Mencari...</span></div>
                     <label>Berat Emas Kamu (Gram):</label><input type="number" id="inputBeratEmas"
                         placeholder="Cth: 10, 25">
                 </div>
