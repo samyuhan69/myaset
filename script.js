@@ -1,28 +1,31 @@
 // ==========================================
-// KONFIGURASI GOOGLE API (DATA KAMU)
+// KONFIGURASI UMUM
 // ==========================================
-const G_CLIENT_ID = 'GOOGLE_CLOUD_KAMU';
-const G_API_KEY = 'GOOGLE_CLOUD_KAMU';
+const G_CLIENT_ID = '927719974763-g2bn9qqloid73otsrm2qjpnke7atsfgr.apps.googleusercontent.com';
+const G_API_KEY = 'AIzaSyBZZTCef7_qAhXAkRLTjm80nr0LTVDGdLw';
 const G_FILENAME = 'asetku_data.json';
-// ==========================================
-
+const STORAGE_KEY = 'gdrive_token_v3';
 
 // --- GLOBAL VARS ---
 let daftarAset = [];
 let hargaEmasLive = 0;
-let hargaUSDLive = 15500;
+let hargaUSDLive = 16000; // Default aman
 let isFetching = false;
 let lineChart = null;
 let pieChart = null;
 let editIndex = -1;
 let isPrivacyMode = localStorage.getItem('privacy_mode') === 'true';
 
-// Cache Token Google
-const STORAGE_KEY = 'gdrive_token_v3';
+// Google Auth Vars
 let tokenClient;
 let gapiInited = false;
 let gisInited = false;
+let pendingAction = null;
 
+// PWA Vars
+let deferredPrompt;
+
+// Data Master
 const dataKategori = {
     'reksa': { label: 'Reksadana', jenis: ['Pasar Uang (RDPU)', 'Pendapatan Tetap (RDPT)', 'Saham (RDS)', 'Campuran', 'SBN Ritel (SBR/ORI)', 'Obligasi Korporasi'] },
     'kas': { label: 'Bank', jenis: ['Bank', 'E-Wallet', 'Deposito', 'Tunai'] },
@@ -36,157 +39,262 @@ const bankData = {
     'wallet': ['GoPay', 'OVO', 'Dana', 'ShopeePay', 'LinkAja', 'iSaku']
 };
 
-// --- INIT ---
+// ==========================================
+// 1. INISIALISASI (LOAD)
+// ==========================================
 document.addEventListener("DOMContentLoaded", function () {
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.log);
+    // A. Load Data Lokal & Render UI (Prioritas User Experience)
     loadDataAset();
     isiDropdownKategori();
     updateSubKategori();
-    cekHargaHarian();
     setupInputMasking();
-    updateGoalUI(); updateRunwayUI();
-    setTimeout(() => { renderLineChart(); renderPieChart(); renderRebalancingTable(); }, 500);
-    setInterval(cekHargaHarian, 60000);
+    updateGoalUI();
+    updateRunwayUI();
 
-    // Init Google Auth
-    setTimeout(initGoogleDrive, 1500);
+    // B. Render Grafik
+    setTimeout(() => { renderLineChart(); renderPieChart(); renderRebalancingTable(); }, 500);
+
+    // C. JALANKAN FETCH HARGA (PRIORITAS UTAMA)
+    console.log("🚀 Memulai engine harga...");
+    cekHargaHarian();
+    setInterval(cekHargaHarian, 60000); // Cek ulang tiap 60 detik
+
+    // D. Init Google Auth (Hanya untuk persiapan Backup)
+    setTimeout(initGoogleDrive, 2000);
+
+    // E. Register Service Worker (Untuk PWA)
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').then(() => console.log('SW Registered'));
+    }
 });
 
-function getWIBDateString() { return new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'); }
-
-// ==========================================
-// 1. ENGINE UTAMA: CEK HARGA
-// ==========================================
-async function cekHargaHarian() {
-    const today = getWIBDateString();
-    // 1. Cek Emas
-    const c = JSON.parse(localStorage.getItem('emas_cache_v1'));
-    if (c && c.date === today && c.price > 0) setHargaEmasSukses(c.price);
-    else startGoldEngine(today);
-    // 2. Cek Bibit
-    fetchAllBibitPrices();
-    // 3. Cek Saham
-    fetchAllStockPrices();
+function getWIBDateString() {
+    return new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-');
 }
 
+// ==========================================
+// 2. ENGINE HARGA (THE CORE)
+// ==========================================
+
+async function cekHargaHarian() {
+    const today = getWIBDateString();
+
+    // 1. Cek Emas (Engine Baru)
+    await startGoldEngine(today);
+
+    // 2. Cek Saham
+    await fetchAllStockPrices();
+
+    // 3. Cek Bibit
+    await fetchAllBibitPrices();
+}
+
+// --- ENGINE EMAS (FIXED SCRAPING) ---
+async function startGoldEngine(d) {
+    if (isFetching) return;
+    isFetching = true;
+    const l = document.getElementById('livePriceLabel');
+    if (l) l.innerText = "⏳..";
+
+    // KITA GUNAKAN PROXY 'ALLORIGINS' YANG LEBIH STABIL DARI CORSPROXY
+    const target = 'https://harga-emas.org/';
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}&timestamp=${Date.now()}`;
+
+    try {
+        const response = await fetch(proxyUrl);
+        const data = await response.json(); // AllOrigins mengembalikan JSON { contents: "<html>..." }
+        const html = data.contents;
+
+        if (!html) throw new Error("HTML Kosong");
+
+        // Parsing Manual yang lebih robust
+        // Kita cari teks "1 gr" atau angka yang terlihat seperti harga emas (> 1 juta)
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+
+        // Strategi: Ambil semua elemen tabel, cari yang ada tulisan "1" gram
+        const tds = doc.querySelectorAll('td');
+        let foundPrice = 0;
+
+        for (let i = 0; i < tds.length; i++) {
+            const txt = tds[i].innerText.trim();
+            // Jika ketemu sel isinya "1" (gram)
+            if (txt === '1' || txt === '1.00') {
+                // Cek sel berikutnya (biasanya harga)
+                if (tds[i + 1]) {
+                    let priceTxt = tds[i + 1].innerText.replace(/\D/g, ''); // Hapus Rp dan titik
+                    let p = parseInt(priceTxt);
+                    // Validasi: Harga emas pasti di atas 500rb
+                    if (p > 500000) {
+                        foundPrice = p;
+                        break; // Ketemu! Stop looping.
+                    }
+                }
+            }
+        }
+
+        if (foundPrice > 0) {
+            console.log("✅ Harga Emas Dapat:", foundPrice);
+            hargaEmasLive = foundPrice;
+            localStorage.setItem('emas_cache_v2', JSON.stringify({ date: d, price: foundPrice }));
+
+            if (l) { l.innerText = formatRupiah(foundPrice); l.style.color = "#00c853"; }
+            recalculasiAsetLive(); // Update nilai aset user
+        } else {
+            throw new Error("Pola HTML berubah");
+        }
+
+    } catch (e) {
+        console.warn("⚠️ Gagal ambil emas live:", e);
+        // FALLBACK: Pakai harga cache terakhir, jangan 0
+        const c = JSON.parse(localStorage.getItem('emas_cache_v2'));
+        if (c && c.price > 0) {
+            hargaEmasLive = c.price;
+            if (l) { l.innerText = formatRupiah(c.price) + " (Cached)"; l.style.color = "#ffca28"; }
+            recalculasiAsetLive();
+        } else {
+            if (l) { l.innerText = "Offline"; l.style.color = "#ff1744"; }
+        }
+    } finally {
+        isFetching = false;
+    }
+}
+
+// --- ENGINE SAHAM (YAHOO FINANCE VIA PROXY) ---
 async function fetchAllStockPrices() {
+    let adaUpdate = false;
     for (let i = 0; i < daftarAset.length; i++) {
         let aset = daftarAset[i];
         if (aset.kategori === 'saham' && aset.ticker && aset.lot > 0) {
-            await fetchStockPrice(i, aset.ticker);
+            // Beri jeda sedikit agar tidak dianggap spam
+            await new Promise(r => setTimeout(r, 500));
+            const success = await fetchStockPrice(i, aset.ticker);
+            if (success) adaUpdate = true;
         }
+    }
+    if (adaUpdate) {
+        simpanDataKeStorage();
+        updateTampilan();
+        triggerAutoBackup();
     }
 }
 
 async function fetchStockPrice(index, ticker) {
     let yahooTicker = ticker.toUpperCase();
     if (!yahooTicker.includes('.JK')) yahooTicker = yahooTicker + ".JK";
-    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooTicker}`;
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
+    // Gunakan CORS Proxy yang berbeda jika satu gagal
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooTicker}?interval=1d&range=1d`;
+    // Proxy AllOrigins lebih 'sopan' ke browser
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+
     try {
         const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error("Network");
-        const data = await res.json();
+        const jsonWrapper = await res.json(); // Buka bungkus AllOrigins
+
+        if (!jsonWrapper.contents) throw new Error("No Content");
+
+        // Parse isi JSON dari Yahoo
+        const data = JSON.parse(jsonWrapper.contents);
         const result = data.chart.result[0];
         const price = result.meta.regularMarketPrice;
+
         if (price > 0) {
+            console.log(`✅ Saham ${ticker}: ${price}`);
             let aset = daftarAset[index];
             aset.nilai = aset.lot * 100 * price;
             aset.lastPrice = price;
             aset.lastUpdate = getWIBDateString();
-            simpanDataKeStorage();
-            updateTampilan();
+            return true;
         }
-    } catch (e) { console.log(`Gagal ambil harga saham ${ticker}:`, e); }
+    } catch (e) {
+        console.log(`❌ Gagal saham ${ticker}:`, e.message);
+        // JANGAN NOL-KAN HARGA jika gagal fetch. Biarkan harga lama.
+    }
+    return false;
 }
 
+// --- ENGINE BIBIT (REGEX NAV) ---
 async function fetchAllBibitPrices() {
+    let adaUpdate = false;
     for (let i = 0; i < daftarAset.length; i++) {
         let aset = daftarAset[i];
         if (aset.url && aset.url.includes('bibit.id') && aset.berat > 0) {
-            await fetchSingleBibit(i, aset.url);
+            const success = await fetchSingleBibit(i, aset.url);
+            if (success) adaUpdate = true;
         }
+    }
+    if (adaUpdate) {
+        simpanDataKeStorage();
+        updateTampilan();
+        triggerAutoBackup();
     }
 }
 
 async function fetchSingleBibit(index, url, isPreview = false) {
     const label = document.getElementById('liveBibitPrice');
-    if (isPreview && label) label.innerText = "Mencoba...";
+    if (isPreview && label) label.innerText = "⏳...";
+
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}&timestamp=${Date.now()}`;
+
     try {
         const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error("Busy");
         const json = await res.json();
         const html = json.contents;
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-        const bodyText = doc.body.innerText;
-        const regex = /NAV[\s\S]*?Rp\s*([\d,]+\.\d{2})/;
-        const match = bodyText.match(regex);
+
+        // Regex yang lebih umum untuk mencari angka setelah kata "NAV" atau "Rp"
+        // Mencari pola: "NAV" ... sembarang karakter ... "Rp" ... angka
+        const match = html.match(/NAV[\s\S]{1,50}Rp\s*([\d,]+\.?\d*)/i);
+
         if (match && match[1]) {
-            let cleanString = match[1].replace(/,/g, '');
-            let foundPrice = parseFloat(cleanString);
+            let cleanString = match[1].replace(/[^0-9,.]/g, '').replace(/,/g, '.'); // Pastikan format angka benar
+            // Handle format indonesia (titik ribu, koma desimal) vs format luar
+            // Asumsi Bibit pakai format: 1.250,55 -> Kita buang titik, ganti koma jadi titik
+            // Atau format: 1,250.55
+
+            // Simpel: Buang semua non-angka, lalu bagi sesuai logika reksa dana (biasanya ribuan)
+            // Cara paling aman parsing IDR:
+            let rawNum = match[1].replace(/\./g, '').replace(/,/g, '.'); // 1.500,25 -> 1500.25
+            let foundPrice = parseFloat(rawNum);
+
             if (foundPrice > 0) {
-                if (isPreview && label) { label.innerText = formatRupiah(foundPrice); label.style.color = "#00c853"; return; }
+                if (isPreview && label) {
+                    label.innerText = formatRupiah(foundPrice);
+                    label.style.color = "#00c853";
+                    return;
+                }
+
                 let aset = daftarAset[index];
                 aset.nilai = aset.berat * foundPrice;
                 aset.lastPrice = foundPrice;
                 aset.lastUpdate = getWIBDateString();
-                simpanDataKeStorage();
-                updateTampilan();
+                return true;
             }
         }
-    } catch (e) { if (isPreview && label) { label.innerText = "Gagal"; label.style.color = "#ff1744"; } }
-}
-
-function setHargaEmasSukses(h) {
-    hargaEmasLive = h;
-    const l = document.getElementById('livePriceLabel');
-    if (l) { l.innerText = formatRupiah(h); l.style.color = "#00c853"; }
-    recalculasiAsetLive();
-}
-
-async function startGoldEngine(d) {
-    if (isFetching) return; isFetching = true;
-    const l = document.getElementById('livePriceLabel');
-    if (l) l.innerText = "Mencari...";
-    const t = 'https://www.logammulia.com/id/harga-emas-hari-ini';
-    const p = [`https://api.allorigins.win/get?url=${encodeURIComponent(t)}&timestamp=${Date.now()}`];
-    let f = 0;
-    try {
-        const res = await fetch(p[0]);
-        let h = (await res.json()).contents;
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(h, "text/html");
-        const rows = doc.querySelectorAll('tr');
-        for (let row of rows) {
-            if (row.innerText.includes('1 gr')) {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 2 && cells[0].innerText.includes('1 gr') && !cells[0].innerText.includes('10')) {
-                    f = parseInt(cells[1].innerText.replace(/\D/g, '')); break;
-                }
-            }
-        }
-    } catch (e) { }
-    isFetching = false;
-    if (f > 0) {
-        localStorage.setItem('emas_cache_v1', JSON.stringify({ date: d, price: f }));
-        setHargaEmasSukses(f);
+    } catch (e) {
+        console.log("Gagal Bibit:", e);
+        if (isPreview && label) { label.innerText = "Gagal"; label.style.color = "#ff1744"; }
     }
+    return false;
 }
 
 function recalculasiAsetLive() {
     let change = false;
     daftarAset.forEach(a => {
         if (a.subJenis === 'Emas Batangan' && a.berat > 0 && hargaEmasLive > 0) {
-            a.nilai = a.berat * hargaEmasLive; change = true;
+            a.nilai = a.berat * hargaEmasLive;
+            change = true;
         }
     });
-    if (change) { simpanDataKeStorage(); updateTampilan(); }
+    if (change) {
+        simpanDataKeStorage();
+        updateTampilan();
+        triggerAutoBackup();
+    }
 }
 
 // ==========================================
-// 2. UI & LOGIC INPUT
+// 3. UI & LOGIC INPUT
 // ==========================================
 function siapkanTambahAset() {
     editIndex = -1; resetForm();
@@ -203,7 +311,16 @@ function siapkanEditAset(index) {
     updateSubKategori();
     document.getElementById('inputSubJenis').value = aset.subJenis;
     cekModeInput();
-    if (aset.subJenis === 'Emas Batangan') { document.getElementById('inputBeratEmas').value = aset.berat; }
+
+    // Reset inputs
+    document.getElementById('inputBeratEmas').value = '';
+    document.getElementById('inputTicker').value = '';
+    document.getElementById('inputLot').value = '';
+    document.getElementById('inputNilai').value = '';
+
+    if (aset.subJenis === 'Emas Batangan') {
+        document.getElementById('inputBeratEmas').value = aset.berat;
+    }
     else if (aset.ticker && aset.lot) {
         document.getElementById('inputTicker').value = aset.ticker;
         document.getElementById('inputLot').value = aset.lot;
@@ -215,7 +332,10 @@ function siapkanEditAset(index) {
         document.getElementById('inputUnitBibit').value = aset.berat;
         fetchSingleBibit(index, aset.url, true);
     }
-    else { document.getElementById('inputNilai').value = new Intl.NumberFormat('id-ID').format(aset.nilai); }
+    else {
+        document.getElementById('inputNilai').value = new Intl.NumberFormat('id-ID').format(aset.nilai);
+    }
+
     document.getElementById('modalTitle').innerText = "✏️ Edit Aset";
     document.getElementById('btnSimpan').innerText = "Update";
     bukaModal('modalTambah');
@@ -243,16 +363,24 @@ function simpanAsetBaru() {
 
     if (subJenis === 'Emas Batangan') {
         beratInput = parseFloat(document.getElementById('inputBeratEmas').value);
-        if (hargaEmasLive === 0 && nilaiInput === 0) { showToast("Tunggu harga emas...", "info"); return; }
-        nilaiInput = beratInput * hargaEmasLive;
+        if (hargaEmasLive > 0) {
+            nilaiInput = beratInput * hargaEmasLive;
+        } else {
+            // Jika harga belum ke-load, pakai 0 dulu, nanti engine update
+            nilaiInput = 0;
+        }
     }
     else if (kat === 'saham') {
         tickerInput = document.getElementById('inputTicker').value.toUpperCase().trim();
         beratInput = parseFloat(document.getElementById('inputLot').value);
         if (!tickerInput || beratInput <= 0) { showToast("Isi Kode & Lot!", "error"); return; }
+
+        // Coba pakai harga terakhir yang tersimpan di memori aset jika edit
         if (editIndex >= 0 && daftarAset[editIndex].lastPrice) {
             nilaiInput = beratInput * 100 * daftarAset[editIndex].lastPrice;
-        } else { nilaiInput = 0; }
+        } else {
+            nilaiInput = 0;
+        }
         if (!nama) nama = tickerInput;
     }
     else if (document.getElementById('checkAutoBibit').checked) {
@@ -267,32 +395,36 @@ function simpanAsetBaru() {
     }
 
     if (!nama) { showToast("Isi nama aset!", "error"); return; }
+
+    // Construct Object
     let newData = {
-        id: Date.now(), nama, kategori: kat, subJenis, nilai: nilaiInput, berat: beratInput,
-        url: customUrl, ticker: tickerInput, lot: (kat === 'saham') ? beratInput : 0
+        id: (editIndex >= 0) ? daftarAset[editIndex].id : Date.now(),
+        nama, kategori: kat, subJenis, nilai: nilaiInput, berat: beratInput,
+        url: customUrl, ticker: tickerInput,
+        lot: (kat === 'saham') ? beratInput : 0,
+        lastPrice: (editIndex >= 0) ? daftarAset[editIndex].lastPrice : 0,
+        lastUpdate: (editIndex >= 0) ? daftarAset[editIndex].lastUpdate : getWIBDateString()
     };
+
     if (editIndex >= 0) {
-        let a = daftarAset[editIndex];
-        a.nama = nama; a.kategori = kat; a.subJenis = subJenis;
-        a.nilai = nilaiInput > 0 ? nilaiInput : a.nilai;
-        a.berat = beratInput; a.url = customUrl;
-        a.ticker = tickerInput; a.lot = newData.lot;
+        daftarAset[editIndex] = newData;
         showToast("Diperbarui!", "success");
     } else {
         daftarAset.push(newData);
         showToast("Aset ditambahkan", "success");
     }
 
-    // --- AUTO SYNC TRIGGER ---
     simpanDataKeStorage();
     resetForm();
     tutupModal('modalTambah');
     updateTampilan();
 
-    triggerAutoBackup(); // Upload otomatis
+    triggerAutoBackup();
 
-    if (customUrl) fetchAllBibitPrices();
-    if (tickerInput) { showToast("Mengambil harga saham...", "info"); fetchStockPrice(daftarAset.length - 1, tickerInput); }
+    // Trigger fetch khusus untuk aset baru ini
+    if (customUrl) fetchSingleBibit(editIndex >= 0 ? editIndex : daftarAset.length - 1, customUrl);
+    if (tickerInput) fetchStockPrice(editIndex >= 0 ? editIndex : daftarAset.length - 1, tickerInput);
+    if (subJenis === 'Emas Batangan') startGoldEngine(getWIBDateString());
 }
 
 function cekModeInput() {
@@ -319,7 +451,7 @@ function cekModeInput() {
 }
 
 // ==========================================
-// 3. FUNGSI STANDAR LAINNYA
+// 4. HELPER UI & LOGIC
 // ==========================================
 function bukaModal(id) { document.getElementById(id).style.display = 'flex'; if (id === 'modalTransaksi') updateDropdownAset(); }
 function tutupModal(id) { document.getElementById(id).style.display = 'none'; }
@@ -330,18 +462,21 @@ function hapusAset(index) {
         simpanDataKeStorage();
         updateTampilan();
         showToast("Aset dihapus", "info");
-        triggerAutoBackup(); // Upload otomatis
+        triggerAutoBackup();
     }
 }
 
 function showToast(message, type = 'success') { const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = `toast ${type}`; toast.innerHTML = `<span>${message}</span>`; container.appendChild(toast); setTimeout(() => { toast.style.animation = 'fadeOut 0.3s ease-out forwards'; toast.addEventListener('animationend', () => toast.remove()); }, 3000); }
 
 function updateTampilan() {
-    if (hargaEmasLive > 0) recalculasiAsetLive();
     daftarAset.sort((a, b) => a.nama.localeCompare(b.nama));
     let grandTotal = daftarAset.reduce((s, i) => s + (i.nilai > 0 ? i.nilai : 0), 0);
     document.getElementById('grandTotalDisplay').innerText = formatRupiah(grandTotal);
-    simpanHistoryHarian(grandTotal); updateGoalUI(); updateRunwayUI(); renderRebalancingTable(); renderPieChart();
+
+    // Simpan history
+    simpanHistoryHarian(grandTotal);
+
+    updateGoalUI(); updateRunwayUI(); renderRebalancingTable(); renderPieChart();
 
     let sum = { 'reksa': 0, 'kas': 0, 'saham': 0, 'komo': 0, 'kripto': 0 };
     let subSum = {};
@@ -379,8 +514,16 @@ function updateTampilan() {
         if (a.subJenis === 'Emas Batangan') det = `<span style="color:#ffca28">⚖️ ${a.berat.toFixed(2)}g</span>`;
         else if (a.url && a.url.includes('bibit.id')) det = `<span style="color:#00c853">🌱 ${a.berat.toFixed(2)} Unit</span>`;
         else if (a.ticker) det = `<span style="color:#29b6f6">📈 ${a.ticker} (${a.lot} Lot)</span>`;
+
         let kl = dataKategori[a.kategori] ? dataKategori[a.kategori].label : "Lain";
-        mastH += `<tr style="${style}"><td><b>${a.nama}</b><br><small>${det}</small></td><td><small>${kl}</small></td><td><b>${formatRupiah(a.nilai)}</b></td><td>${grandTotal > 0 ? ((a.nilai / grandTotal) * 100).toFixed(1) : 0}%</td><td>${vis.badge}</td><td>${vis.nominal}</td><td class="action-cell"><button class="btn-mini-action btn-edit" onclick="siapkanEditAset(${i})">✏️</button><button class="btn-mini-action btn-delete" onclick="hapusAset(${i})">🗑️</button></td></tr>`;
+
+        // Show last updated price info if available
+        let priceInfo = "";
+        if (a.lastPrice && a.lastPrice > 0) {
+            priceInfo = `<br><small style="color:#666; font-size:0.65rem;">Harga: ${new Intl.NumberFormat('id-ID').format(a.lastPrice)}</small>`;
+        }
+
+        mastH += `<tr style="${style}"><td><b>${a.nama}</b><br><small>${det}</small>${priceInfo}</td><td><small>${kl}</small></td><td><b>${formatRupiah(a.nilai)}</b></td><td>${grandTotal > 0 ? ((a.nilai / grandTotal) * 100).toFixed(1) : 0}%</td><td>${vis.badge}</td><td>${vis.nominal}</td><td class="action-cell"><button class="btn-mini-action btn-edit" onclick="siapkanEditAset(${i})">✏️</button><button class="btn-mini-action btn-delete" onclick="hapusAset(${i})">🗑️</button></td></tr>`;
     }
     document.getElementById('masterTableBody').innerHTML = cA === 0 ? "<tr><td colspan='7' style='text-align:center; padding:20px; color:#666;'>Dompet Kosong</td></tr>" : mastH;
 }
@@ -434,17 +577,29 @@ function prosesTransaksi() {
     tutupModal('modalTransaksi');
     updateTampilan();
     showToast("Saldo diperbarui", "success");
-    // AUTO BACKUP SETELAH TRANSAKSI
     triggerAutoBackup();
 }
 
-// Update Local Data with Timestamp for Smart Sync
+// STORAGE
 function simpanDataKeStorage() {
     localStorage.setItem('portfolio_assets_v1', JSON.stringify(daftarAset));
-    localStorage.setItem('local_last_updated', new Date().toISOString()); // NEW: Track last local edit
+    localStorage.setItem('local_last_updated', new Date().toISOString());
 }
 
-function loadDataAset() { const d = localStorage.getItem('portfolio_assets_v1'); if (d) { try { daftarAset = JSON.parse(d); let u = false; daftarAset.forEach(a => { if (!dataKategori[a.kategori]) { a.kategori = 'reksa'; u = true } }); if (u) simpanDataKeStorage(); updateTampilan(); } catch (e) { } } }
+function loadDataAset() {
+    const d = localStorage.getItem('portfolio_assets_v1');
+    if (d) {
+        try {
+            daftarAset = JSON.parse(d);
+            // Migrasi data lama jika format kategori salah
+            let u = false;
+            daftarAset.forEach(a => { if (!dataKategori[a.kategori]) { a.kategori = 'reksa'; u = true } });
+            if (u) simpanDataKeStorage();
+            updateTampilan();
+        } catch (e) { console.error("Data korup", e); }
+    }
+}
+
 function simpanHistoryHarian(t) { const d = getWIBDateString(); let h = JSON.parse(localStorage.getItem('portfolio_history')) || [], i = h.findIndex(x => x.date === d), s = {}; daftarAset.forEach(a => { if (a.nilai > 0) s[a.id] = a.nilai; }); if (i >= 0) { h[i].total = t; h[i].details = s; } else h.push({ date: d, total: t, details: s }); h.sort((a, b) => new Date(a.date) - new Date(b.date)); localStorage.setItem('portfolio_history', JSON.stringify(h)); hitungPerformaGlobal(t, h); if (!document.getElementById('monthPicker').value) renderLineChart(); }
 function hitungPerformaGlobal(c, h) { if (h.length < 2) return; const t = getWIBDateString(), i = h.findIndex(x => x.date === t), p = i - 1; if (p >= 0) { let d = c - h[p].total, pc = (d / h[p].total) * 100, cl = d >= 0 ? '#00c853' : '#ff1744', ic = d >= 0 ? '▲' : '▼'; document.getElementById('perf-1d').innerHTML = `Vs Kemarin: <span style="color:${cl};font-weight:bold;">${ic} ${pc.toFixed(2)}%</span>`; } }
 function getAssetTrend(id, v) { let h = JSON.parse(localStorage.getItem('portfolio_history')) || [], t = getWIBDateString(), i = h.findIndex(x => x.date === t); if (i <= 0) return 0; const p = h[i - 1]; if (p.details && p.details[id] !== undefined) { let pv = p.details[id]; if (pv === 0) return v > 0 ? 100 : 0; return ((v - pv) / pv) * 100; } return 0; }
@@ -456,20 +611,25 @@ function updateDropdownAset() { let el = document.getElementById('pilihAsetTrans
 
 
 // ==========================================
-// 4. GOOGLE DRIVE ENGINE (SMART AUTO-SYNC)
+// 5. GOOGLE DRIVE ENGINE (BACKUP ONLY)
 // ==========================================
-let pendingAction = null;
-
 function initGoogleDrive() {
     if (typeof gapi !== 'undefined' && typeof google !== 'undefined') {
         gapi.load('client', async () => {
             await gapi.client.init({ apiKey: G_API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
             gapiInited = true;
-            if (localStorage.getItem(STORAGE_KEY)) {
-                updateUISignedIn();
-                console.log("Session restored. Checking sync...");
-                // START SMART SYNC SAAT BUKA APLIKASI
-                smartSyncOnLoad();
+
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const tokenData = JSON.parse(stored);
+                if (tokenData.expires_at > Date.now()) {
+                    updateUISignedIn();
+                    // Jika data lokal kosong, baru tawarkan restore
+                    if (daftarAset.length === 0) performSmartRestore();
+                } else {
+                    localStorage.removeItem(STORAGE_KEY);
+                    checkAuthStatus();
+                }
             } else {
                 checkAuthStatus();
             }
@@ -488,20 +648,19 @@ function initGoogleDrive() {
 
 function handleTokenResponse(resp) {
     if (resp.error) { showToast("Gagal Login", "error"); return; }
-
-    const tokenData = {
-        access_token: resp.access_token,
-        expires_at: Date.now() + ((resp.expires_in || 3599) * 1000)
-    };
+    const tokenData = { access_token: resp.access_token, expires_at: Date.now() + ((resp.expires_in || 3599) * 1000) };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tokenData));
     gapi.client.setToken({ access_token: resp.access_token });
     updateUISignedIn();
 
-    // JIKA USER BARU LOGIN MANUAL -> LAKUKAN SMART SYNC
+    // BACKUP LOGIC:
     if (pendingAction === 'upload') uploadToDriveActual(true);
-    else if (pendingAction === 'restore') restoreFromDriveActual(true);
-    else smartSyncOnLoad(); // Cek mana yang lebih baru (Cloud vs Local)
-
+    else if (pendingAction === 'restore') restoreFromDriveActual(false);
+    else {
+        // Default: Backup data lokal ke cloud jika ada data
+        if (daftarAset.length > 0) uploadToDriveActual(true);
+        else restoreFromDriveActual(false);
+    }
     pendingAction = null;
 }
 
@@ -539,61 +698,18 @@ function logoutGoogle() {
 }
 
 function triggerAutoBackup() {
-    // Dipanggil setiap kali user edit data
     if (localStorage.getItem(STORAGE_KEY)) {
-        uploadToDrive(true); // true = silent mode (gak perlu popup toast lebay)
+        uploadToDrive(true);
     }
 }
 
-// --- LOGIKA SMART SYNC (The Brain) ---
-async function smartSyncOnLoad() {
-    executeWithAuth('sync');
+async function performSmartRestore() {
+    executeWithAuth('restore', true);
 }
 
-async function performSmartSync() {
-    // 1. Ambil info file di Cloud
-    const fileId = await findFileId(G_FILENAME);
-    if (!fileId) {
-        // Cloud kosong? Upload data lokal sekarang
-        if (daftarAset.length > 0) uploadToDriveActual(true);
-        return;
-    }
-
-    // 2. Cek Metadata Cloud
-    const res = await gapi.client.drive.files.get({ fileId: fileId, fields: 'createdTime, modifiedTime' });
-
-    // Download isi untuk cek timestamp internal kita
-    const contentRes = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
-    const cloudData = contentRes.result;
-
-    const cloudTime = new Date(cloudData.last_synced || 0).getTime();
-    const localTimeStr = localStorage.getItem('local_last_updated');
-    const localTime = localTimeStr ? new Date(localTimeStr).getTime() : 0;
-
-    console.log("Cloud Time:", new Date(cloudTime).toLocaleString());
-    console.log("Local Time:", new Date(localTime).toLocaleString());
-
-    // 3. BANDINGKAN
-    if (cloudTime > localTime) {
-        // Cloud LEBIH BARU -> Restore ke HP (Tanpa tanya, karena user minta otomatis)
-        showToast("Sinkronisasi: Mengambil data terbaru...", "info");
-        localStorage.setItem('portfolio_assets_v1', cloudData.assets);
-        localStorage.setItem('portfolio_history', cloudData.history);
-        localStorage.setItem('local_last_updated', cloudData.last_synced); // Samakan waktu
-        setTimeout(() => location.reload(), 1000);
-    } else if (localTime > cloudTime) {
-        // HP LEBIH BARU -> Upload ke Cloud
-        console.log("Local newer. Uploading...");
-        uploadToDriveActual(true);
-    } else {
-        console.log("Data sudah sinkron.");
-    }
-}
-
-// --- WRAPPERS ---
 function executeWithAuth(actionName, isSilent = false) {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return; // Belum login, abaikan auto-sync
+    if (!stored) return;
 
     const tokenData = JSON.parse(stored);
     if (tokenData.expires_at < (Date.now() + 60000)) {
@@ -604,36 +720,27 @@ function executeWithAuth(actionName, isSilent = false) {
         gapi.client.setToken({ access_token: tokenData.access_token });
         if (actionName === 'upload') uploadToDriveActual(isSilent);
         if (actionName === 'restore') restoreFromDriveActual(isSilent);
-        if (actionName === 'sync') performSmartSync();
     }
 }
 
 function uploadToDrive(silent = false) { executeWithAuth('upload', silent); }
 function restoreFromDrive(silent = false) { executeWithAuth('restore', silent); }
 
-// --- CORE ACTIONS ---
 async function uploadToDriveActual(silent) {
-    if (!silent) showToast("Mengupload data...", "info");
+    if (!silent) showToast("Membackup data...", "info");
     const syncTime = new Date().toISOString();
-
-    // Simpan timestamp sync ini juga ke lokal agar sinkron
-    localStorage.setItem('local_last_updated', syncTime);
-
     const content = JSON.stringify({
         assets: localStorage.getItem('portfolio_assets_v1'),
         history: localStorage.getItem('portfolio_history'),
         last_synced: syncTime
     });
-
     const fileMetadata = { 'name': G_FILENAME, 'mimeType': 'application/json' };
     const fileBlob = new Blob([content], { type: 'application/json' });
-
     try {
         const existingId = await findFileId(G_FILENAME);
         if (existingId) { await updateFileGoogle(existingId, fileBlob); }
         else { await createFileGoogle(fileMetadata, fileBlob); }
-
-        if (!silent) showToast("Tersimpan di Cloud!", "success");
+        if (!silent) showToast("Backup Berhasil!", "success");
         else {
             const stat = document.getElementById('syncStatus');
             if (stat) {
@@ -642,9 +749,7 @@ async function uploadToDriveActual(silent) {
             }
         }
     } catch (err) {
-        console.error(err);
         if (err.status === 401) { pendingAction = 'upload'; tokenClient.requestAccessToken({ prompt: '' }); }
-        else if (!silent) showToast("Gagal Upload", "error");
     }
 }
 
@@ -653,26 +758,17 @@ async function restoreFromDriveActual(silent) {
     try {
         const fileId = await findFileId(G_FILENAME);
         if (!fileId) { if (!silent) showToast("Tidak ada backup.", "error"); return; }
-
         const res = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
         const data = res.result;
-
-        // Langsung timpa (karena ini dipanggil manual atau via smart sync logika)
         localStorage.setItem('portfolio_assets_v1', data.assets);
         localStorage.setItem('portfolio_history', data.history);
-        localStorage.setItem('local_last_updated', data.last_synced);
-
         if (!silent) showToast("Restore Berhasil!", "success");
-        setTimeout(() => location.reload(), 1000);
-
+        setTimeout(() => location.reload(), 500);
     } catch (err) {
-        console.error(err);
         if (err.status === 401) { pendingAction = 'restore'; tokenClient.requestAccessToken({ prompt: '' }); }
-        else if (!silent) showToast("Gagal Restore", "error");
     }
 }
 
-// Helpers
 async function findFileId(name) {
     const res = await gapi.client.drive.files.list({ q: `name = '${name}' and trashed = false`, fields: 'files(id, name)', spaces: 'drive' });
     return (res.result.files && res.result.files.length > 0) ? res.result.files[0].id : null;
@@ -686,3 +782,72 @@ async function updateFileGoogle(id, blob) {
     const token = gapi.client.getToken().access_token;
     await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`, { method: 'PATCH', headers: new Headers({ 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }), body: blob });
 }
+
+// ==========================================
+// 6. PWA INSTALL LOGIC
+// ==========================================
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const banner = document.getElementById('pwa-install-banner');
+    if (banner) banner.style.display = 'flex';
+});
+
+async function installPWA() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    document.getElementById('pwa-install-banner').style.display = 'none';
+}
+
+function closeInstallBanner() {
+    document.getElementById('pwa-install-banner').style.display = 'none';
+}
+
+/* ======================================================
+   PATCH v2: FIX DAILY TREND (PRESERVE EXISTING HISTORY)
+   ====================================================== */
+(function () {
+    const TREND_LOCK_KEY = 'trend_saved_today_lock';
+
+    function getTodayWIB() {
+        return new Date().toLocaleDateString('id-ID', {
+            timeZone: 'Asia/Jakarta',
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        }).split('/').reverse().join('-');
+    }
+
+    const _origUpdate = window.updateTampilan;
+    if (typeof _origUpdate === 'function') {
+        window.updateTampilan = function () {
+            _origUpdate.apply(this, arguments);
+            try {
+                const today = getTodayWIB();
+                const lock = localStorage.getItem(TREND_LOCK_KEY);
+                if (lock === today) return;
+
+                const total = (window.daftarAset || []).reduce(
+                    (s, a) => s + (a.nilai > 0 ? a.nilai : 0), 0
+                );
+
+                if (typeof window.simpanHistoryHarian === 'function') {
+                    window.simpanHistoryHarian(total);
+                    localStorage.setItem(TREND_LOCK_KEY, today);
+                }
+            } catch (e) { }
+        };
+    }
+
+    const _origBackup = window.triggerAutoBackup;
+    window.triggerAutoBackup = function () {
+        try {
+            const raw = localStorage.getItem('gdrive_token_v3');
+            if (!raw) return;
+            const t = JSON.parse(raw);
+            if (t.expires_at && t.expires_at > Date.now()) {
+                _origBackup && _origBackup.apply(this, arguments);
+            }
+        } catch (e) { }
+    };
+})();
