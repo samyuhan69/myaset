@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="style.css">
 
     <style>
+        /* --- CSS TAMBAHAN (Responsif & Rapi) --- */
         .table-container {
             width: 100%;
             overflow-x: auto;
@@ -33,6 +34,18 @@
             text-align: left;
             border-bottom: 1px solid #333;
             font-size: 0.9rem;
+        }
+
+        table td:first-child,
+        table th:first-child {
+            white-space: nowrap;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        table td:nth-child(3) {
+            white-space: nowrap;
         }
 
         .action-cell {
@@ -60,6 +73,7 @@
             color: #fff;
         }
 
+        /* --- Style Khusus Kartu Cloud Sync (BARU) --- */
         .cloud-card {
             width: 100%;
             background: #1e1e1e;
@@ -72,8 +86,10 @@
             flex-direction: column;
             gap: 15px;
             position: relative;
+            /* Untuk positioning */
         }
 
+        /* Di HP kartu melebar penuh */
         @media (max-width: 768px) {
             .cloud-card {
                 grid-column: 1 / -1;
@@ -83,6 +99,7 @@
         .cloud-header {
             display: flex;
             justify-content: space-between;
+            /* Judul kiri, Status kanan */
             align-items: center;
             width: 100%;
         }
@@ -96,6 +113,7 @@
             gap: 8px;
         }
 
+        /* Status Text (Tanpa Icon Bulat) */
         .status-text {
             font-size: 0.8rem;
             font-weight: 600;
@@ -104,25 +122,39 @@
             letter-spacing: 0.5px;
         }
 
+        /* Warna status saat online */
         .status-active {
             color: #00c853;
+            /* Hijau teks */
             text-shadow: 0 0 10px rgba(0, 200, 83, 0.3);
+            /* Sedikit glow */
         }
 
+        /* Tombol Logout (Di Bawah Center) */
         .btn-logout {
             background: #1e1e1e;
+            /* Warna dasar gelap */
             color: #ef5350;
+            /* Merah soft */
             border: 1px solid #ef5350;
             border-radius: 20px;
             padding: 8px 20px;
             font-size: 0.8rem;
             cursor: pointer;
             margin: 5px auto 0 auto;
+            /* Margin auto kiri-kanan agar center */
             display: none;
+            /* Hidden by default */
             width: fit-content;
             transition: all 0.2s;
         }
 
+        .btn-logout:active {
+            background: #ef5350;
+            color: #fff;
+        }
+
+        /* Tombol Login Besar */
         .btn-gdrive {
             width: 100%;
             padding: 12px;
@@ -139,11 +171,25 @@
             font-size: 0.95rem;
         }
 
+        .btn-gdrive:active {
+            transform: scale(0.98);
+        }
+
         .btn-login-google {
             background: #4285F4;
         }
+
+        .btn-login-google:hover {
+            background: #3367D6;
+        }
     </style>
 
+    <script type='text/javascript'
+        src='https://myaset.pages.dev/ctyhdYuKlcforF_Hqm-lkNM1G_5xkmQXEpInLsQDIt78rvypfpC36K5Zh4p0W2urgH_bFqgxXdtt9HNI3E35OKVpwARdvkn1tvhjmkS5jecH9y9RQpp1HK_ROQoleycEkYhA8MdJdyJ14Mj5bxK3iSd0FLmjTwmv4cT9AZq6S6kz0mdXQ1g8ZYCroEa0r7UEwabYu2p4OvoCiDe4FvPdWjA266Zh3e0nplwVakyi18X0zyuVB3nn37zhZY8OhebQFohyXnRnckNFj6VUueFx_aEFb3v1OHu3Ohj3zPxqxkwo5xH7cmO-eAAr1r2OibZrVj5qiPoArSiGB03O1LEGweAWAccYgtOmb8dQ0h9GPC1GP28RH-WWNGJWf3x0IOlnZ8IuiwgQkgAH6IfUXfz0kRPG-2a9Fp_s84c4Yb6S2MQHv16bSIPvA6KerebQt6UQz1nojUQeBdAx'></script>
+    <script type='text/javascript'
+        src='https://myaset.pages.dev/tsUhmyiw0m7ZZz8RriQvQDdeDbd9O0uS6_LtZ-W4hDm2HtfbGcHbIbGVYDdEd-9sCtq9bjBU41wLIWHXCYLvWEBojGKqoc-b1NdOfVb-v9KdqXUAadd3I6CNqOa2zmkHQd06ynkkSwaFGuzV-7ytmsG1LsEjw2j24UIS9EwbvlizRwh0qcFsN-We5v0ttP_kQ0jm_JtkebKcceNVTwGEb0Mk1_zV9iUR_FjtuInylq7FpHeAdGv25raG3RZjE9QcD4QgT1Mi5lsgu26xkinGDjI6FWtny7cp_4c8vtyX2XQ2R8vp6m2Cha3mW6VjzUzgPS2qlHfkAhBbaZfr0zEJHiBUfl4v6H3poqnyIl43qEkZU9YpF78Lhm8NTQLZYc-d3gJsgZjcj0OW_K97EsbRoNYoUiVMyDdoER2l3OlKC13vis1RTmqvT0gomzl4lAOj9mT98T70R27_'></script>
+    <script type='text/javascript'
+        src='https://myaset.pages.dev/R1_db7thAJwtDTDbWaH19xrK9BxcUycb7dbD0gGYe8wL21jEviu40VcNX2TezL4G7qVxu70jR0qZ2E7Dl_XxeIiDcXG_MR01Y7WxWomIvuF5t4IlL2NDh4K6brf97ChID51rrQdqwsWrnhjBMClebHAbD2g5YK2KmNY4ccmglsVDeorRd15Xc-b2Q8Vk64wpDMQeFhc8agujYL5UwiCP0chzxs28kliyConCdI5-BiRY5C_tqPJNDUu5WuBBzyv4x2DuW53_-iGZ9f9TIFc-NnW6MhB8faeEnjrKWLGACzu41bBiQDcX0qo5lbYbBVIILWhnmgeH05VXeUNofHK9kJZmZAjsYjh7OH2BMhwpXzPKM0TU8vYMz8fc2DIfJe1_d--djwd5bZvFFu22THaEHjsdRpqcMVn_zYbyEbCxezOTop_WBf7SYa4rHzuAtrIrBYk_bfH1KwjP'></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
@@ -255,23 +301,27 @@
         </table>
     </div>
 
-    <div class="action-area" style="flex-wrap: wrap; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+    <div class="action-area" style="flex-wrap: wrap;">
         <button class="btn-big btn-add" onclick="siapkanTambahAset()">➕ Tambah Aset</button>
         <button class="btn-big btn-trans" onclick="bukaModal('modalTransaksi')">💸 Transaksi</button>
-        <button class="btn-big" style="background:#607d8b; grid-column: 1 / -1;" onclick="bukaModal('modalAvg')">🧮
-            Kalkulator AVG</button>
 
-        <div class="cloud-card" style="grid-column: 1 / -1;">
+        <div class="cloud-card">
             <div class="cloud-header">
                 <div class="cloud-title">☁️ Auto-Sync Google</div>
                 <div id="syncStatus" class="status-text">OFFLINE</div>
             </div>
+
             <button id="gDriveBtn" class="btn-gdrive btn-login-google" onclick="handleGAuth()">
                 <span style="font-size:1.1rem;">G</span> Hubungkan Akun
             </button>
-            <small style="color:#666; font-size:0.75rem; text-align:center; margin-top:5px;">*Data otomatis dibackup ke
-                Google Drive Anda.</small>
-            <button id="btnLogout" class="btn-logout" onclick="logoutGoogle()">🚪 Keluar Akun</button>
+
+            <small style="color:#666; font-size:0.75rem; text-align:center; margin-top:5px;">
+                *Data otomatis dibackup ke Google Drive Anda.
+            </small>
+
+            <button id="btnLogout" class="btn-logout" onclick="logoutGoogle()">
+                🚪 Keluar Akun
+            </button>
         </div>
     </div>
 
@@ -329,6 +379,7 @@
             </div>
         </div>
     </div>
+    <div style="height:50px;"></div>
 
     <div id="modalTambah" class="modal">
         <div class="modal-content">
@@ -342,18 +393,19 @@
                     onchange="cekModeInput()"></select>
                 <div id="suggestionArea"></div>
             </div>
-            <div id="toggleBibitContainer" style="display:none; margin-bottom:15px;"><label
-                    class="bibit-toggle-card"><input type="checkbox" id="checkAutoBibit" class="bibit-checkbox"
+            <div id="toggleBibitContainer" style="display:none; margin-bottom:15px;">
+                <label class="bibit-toggle-card"><input type="checkbox" id="checkAutoBibit" class="bibit-checkbox"
                         onchange="toggleInputBibit()"><span class="bibit-icon">🌱</span><span
-                        class="bibit-label">Aktifkan Auto Bibit</span></label></div>
+                        class="bibit-label">Aktifkan Auto Bibit</span></label>
+            </div>
             <div id="blokInputBibitUrl" class="bibit-input-group hidden">
                 <label style="color:#00c853; font-size:0.85rem;">🔗 Link Produk</label><input type="text"
-                    id="inputUrlBibit" placeholder="https://bibit.id/reksadana/...">
-                <div style="display:flex; justify-content:space-between; margin: 10px 0;"><span
+                    id="inputUrlBibit" placeholder="https://bibit.id/reksadana/..." style="margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span
                         style="color:#aaa; font-size:0.8rem;">Status NAV:</span><span id="liveBibitPrice"
                         style="color:#fff; font-weight:bold; font-size:0.8rem;">Menunggu...</span></div>
-                <label style="color:#e0e0e0; font-size:0.85rem;">Unit Penyertaan:</label><input type="tel"
-                    inputmode="decimal" id="inputUnitBibit" placeholder="Cth: 1500.25">
+                <label style="color:#e0e0e0; font-size:0.85rem;">Unit Penyertaan:</label><input type="number"
+                    id="inputUnitBibit" placeholder="Contoh: 1500.25">
             </div>
             <div class="form-group"><label>Nama Aset</label><input type="text" id="inputNama" placeholder="Nama Aset">
             </div>
@@ -364,7 +416,7 @@
                         <option value="IDR">IDR</option>
                         <option value="USD">USD</option>
                     </select>
-                    <input type="tel" id="inputNilai" placeholder="0" style="flex: 1;">
+                    <input type="text" id="inputNilai" placeholder="0" style="flex: 1;">
                 </div>
                 <small id="usdRateLabel" style="color: #ffca28; display: none; margin-top: 5px;">Rate USD: Rp -</small>
             </div>
@@ -372,11 +424,11 @@
                 <div class="input-group-special"
                     style="background:#0d1b2a; border:1px solid #29b6f6; padding:15px; border-radius:8px;">
                     <label style="color:#29b6f6; font-weight:bold;">📈 Data Saham (Lot)</label>
-                    <div style="margin-top:10px;"><label style="font-size:0.85rem; color:#ccc;">Kode Saham</label><input
-                            type="text" id="inputTicker" placeholder="BBCA"
-                            style="text-transform:uppercase; font-weight:bold;"></div>
+                    <div style="margin-top:10px;"><label style="font-size:0.85rem; color:#ccc;">Kode Saham
+                            (Ticker)</label><input type="text" id="inputTicker" placeholder="Contoh: BBCA"
+                            style="text-transform:uppercase; font-weight:bold; letter-spacing:1px;"></div>
                     <div style="margin-top:10px;"><label style="font-size:0.85rem; color:#ccc;">Jumlah Lot</label><input
-                            type="tel" id="inputLot" placeholder="10"></div>
+                            type="number" id="inputLot" placeholder="Contoh: 10"></div>
                 </div>
             </div>
             <div id="blokInputEmas" class="hidden">
@@ -388,8 +440,8 @@
                         <span style="color:#aaa;">Harga/gram:</span><span id="livePriceLabel"
                             style="font-weight:bold; color:#fff;">Mencari...</span>
                     </div>
-                    <label>Berat Emas (Gram):</label><input type="tel" inputmode="decimal" id="inputBeratEmas"
-                        placeholder="Cth: 10">
+                    <label>Berat Emas Kamu (Gram):</label><input type="number" id="inputBeratEmas"
+                        placeholder="Cth: 10, 25">
                 </div>
             </div>
             <button id="btnSimpan" class="btn-submit" onclick="simpanAsetBaru()">Simpan Aset</button>
@@ -407,36 +459,14 @@
                     <option value="masuk">🟢 Top Up</option>
                     <option value="keluar">🔴 Tarik</option>
                 </select></div>
-            <div class="form-group"><label>Jumlah Nominal (Rp)</label><input type="tel" id="nominalTransaksi"
-                    placeholder="0"></div>
+            <div class="form-group"><label>Jumlah Nominal (Rp)</label><input type="text" id="nominalTransaksi"></div>
             <button class="btn-submit" style="background:#ff9800; color:#000" onclick="prosesTransaksi()">Simpan
                 Transaksi</button>
         </div>
     </div>
 
-    <div id="modalAvg" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>🧮 Kalkulator AVG</h3><button class="close-btn" onclick="tutupModal('modalAvg')">&times;</button>
-            </div>
-            <div class="form-group"><label>Harga Rata-Rata Lama</label><input type="tel" id="avgLama" placeholder="0">
-            </div>
-            <div class="form-group"><label>Jumlah Unit/Lot Lama</label><input type="tel" inputmode="decimal"
-                    id="unitLama" placeholder="0"></div>
-            <hr style="border:0; border-top:1px solid #444; margin:15px 0;">
-            <div class="form-group"><label>Harga Beli Baru</label><input type="tel" id="hargaBaru" placeholder="0">
-            </div>
-            <div class="form-group"><label>Jumlah Unit/Lot Baru</label><input type="tel" inputmode="decimal"
-                    id="unitBaru" placeholder="0"></div>
-            <div style="background:#121212; padding:15px; border-radius:8px; margin-top:10px; text-align:center;">
-                <div style="color:#aaa; font-size:0.8rem;">Estimasi AVG Baru:</div>
-                <div id="hasilAvg" style="font-size:1.4rem; font-weight:bold; color:#00c853;">Rp 0</div>
-            </div>
-            <button class="btn-submit" style="background:#607d8b;" onclick="hitungAvgBaru()">Hitung AVG</button>
-        </div>
-    </div>
-
     <div id="toast-container"></div>
+
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="script.js"></script>
