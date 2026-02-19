@@ -42,7 +42,7 @@ document.addEventListener("DOMContentLoaded", function () {
     loadDataAset();
     isiDropdownKategori();
     updateSubKategori();
-    setupInputMasking(); // Fungsi yang sudah dimodifikasi untuk keyboard angka
+    setupInputMasking();
     updateGoalUI();
     updateRunwayUI();
     setTimeout(() => { renderLineChart(); renderPieChart(); renderRebalancingTable(); }, 500);
@@ -57,10 +57,7 @@ function getWIBDateString() { return new Date().toLocaleDateString('id-ID', { ti
 // 2. MODIFIKASI: KEYBOARD & INPUT MASKING
 // ==========================================
 function setupInputMasking() {
-    // ID yang keyboard-nya langsung angka + format ribuan (Titik)
     const currencyIds = ['inputNilai', 'nominalTransaksi', 'avgLama', 'hargaBaru'];
-
-    // ID yang keyboard-nya angka/decimal tanpa format ribuan (untuk Unit/Lot)
     const decimalIds = ['inputLot', 'inputBeratEmas', 'inputUnitBibit', 'unitLama', 'unitBaru'];
 
     currencyIds.forEach(id => {
@@ -81,7 +78,6 @@ function setupInputMasking() {
             el.setAttribute('type', 'tel');
             el.setAttribute('inputmode', 'decimal');
             el.addEventListener('input', function () {
-                // Hanya izinkan angka, titik, dan koma
                 this.value = this.value.replace(/[^0-9.,]/g, '');
             });
         }
@@ -213,12 +209,13 @@ function updateTampilan() {
 
     let mastH = "";
     daftarAset.forEach((a, i) => {
-        let det = a.subJenis;
-        if (a.subJenis === 'Emas Batangan') det = `⚖️ ${a.berat}g`;
-        else if (a.ticker) det = `📈 ${a.ticker} (${a.lot} Lot)`;
-        else if (a.url) det = `🌱 ${a.berat} Unit`;
+        let det = "";
+        // Perbaikan: Menyatukan detail ke samping agar tidak membuat baris melebar ke bawah
+        if (a.subJenis === 'Emas Batangan') det = ` <span style="color:#ffca28; font-size:0.8rem;">(${a.berat}g)</span>`;
+        else if (a.ticker) det = ` <span style="color:#29b6f6; font-size:0.8rem;">(${a.ticker} - ${a.lot} Lot)</span>`;
+        else if (a.url) det = ` <span style="color:#00c853; font-size:0.8rem;">(${a.berat} Unit)</span>`;
 
-        mastH += `<tr><td><b>${a.nama}</b><br><small>${det}</small></td><td>${dataKategori[a.kategori].label}</td><td><b>${formatRupiah(a.nilai)}</b></td><td>${grandTotal > 0 ? ((a.nilai / grandTotal) * 100).toFixed(1) : 0}%</td><td>-</td><td>-</td><td class="action-cell"><button class="btn-mini-action btn-edit" onclick="siapkanEditAset(${i})">✏️</button><button class="btn-mini-action btn-delete" onclick="hapusAset(${i})">🗑️</button></td></tr>`;
+        mastH += `<tr><td><b>${a.nama}</b>${det}</td><td>${dataKategori[a.kategori].label}</td><td><b>${formatRupiah(a.nilai)}</b></td><td>${grandTotal > 0 ? ((a.nilai / grandTotal) * 100).toFixed(1) : 0}%</td><td>-</td><td>-</td><td class="action-cell"><button class="btn-mini-action btn-edit" onclick="siapkanEditAset(${i})">✏️</button><button class="btn-mini-action btn-delete" onclick="hapusAset(${i})">🗑️</button></td></tr>`;
     });
     document.getElementById('masterTableBody').innerHTML = mastH;
 }
