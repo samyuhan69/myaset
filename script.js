@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(() => { renderLineChart(); renderPieChart(); renderRebalancingTable(); }, 500);
 
     // FETCH HARGA START via WORKER LOKAL
-    console.log("🚀 Engine Harga v11 & Fitur Sorting/Performa Dimulai...");
+    console.log("🚀 Engine Harga v11 & Fitur Dividen Dimulai...");
     cekHargaHarian();
 
     setTimeout(initGoogleDrive, 2000);
@@ -278,7 +278,6 @@ function recalculasiAsetLive() {
     if (change) { simpanDataKeStorage(); updateTampilan(); }
 }
 
-
 function loadDataAset() {
     const d = localStorage.getItem('portfolio_assets_v1');
     if (d) {
@@ -299,20 +298,19 @@ function loadDataAset() {
 }
 
 // ==========================================
-// FITUR BARU: SORTING MASTER TABLE
+// SORTING MASTER TABLE & UPDATE TAMPILAN
 // ==========================================
 function sortMasterTable(col) {
     if (currentSortCol === col) {
-        currentSortAsc = !currentSortAsc; // Balik arah sort jika kolom yang sama diklik
+        currentSortAsc = !currentSortAsc;
     } else {
         currentSortCol = col;
-        currentSortAsc = true; // Default ascending jika kolom baru
+        currentSortAsc = true;
     }
     updateTampilan();
 }
 
 function updateTampilan() {
-    // Hitung grandTotal & Trend SEBELUM melakukan Sorting
     let grandTotal = daftarAset.reduce((s, i) => s + (!isNaN(i.nilai) && i.nilai > 0 ? i.nilai : 0), 0);
     if (isNaN(grandTotal)) grandTotal = 0;
 
@@ -348,16 +346,15 @@ function updateTampilan() {
         return 0;
     });
 
-    // Update UI Header Panah Sort
+    // Update UI Header Panah Sort (Ikon ↕️ Dihapus)
     ['nama', 'kategori', 'nilai', 'porsi', 'trend', 'profit'].forEach(c => {
         let el = document.getElementById('sort-' + c);
         if (el) {
             el.innerHTML = (currentSortCol === c)
-                ? (currentSortAsc ? '<span style="color:#00c853">▲</span>' : '<span style="color:#ff1744">▼</span>')
-                : '<span style="color:#444">↕️</span>';
+                ? (currentSortAsc ? '<span style="color:#00c853"> ▲</span>' : '<span style="color:#ff1744"> ▼</span>')
+                : '';
         }
     });
-    // ========================
 
     document.getElementById('grandTotalDisplay').innerText = formatRupiah(grandTotal);
     simpanHistoryHarian(grandTotal);
@@ -407,7 +404,6 @@ function updateTampilan() {
         let priceInfo = "";
         if (a.lastPrice && a.lastPrice > 0) priceInfo = `<br><small style="color:#666; font-size:0.65rem;">Harga: ${new Intl.NumberFormat('id-ID').format(a.lastPrice)}</small>`;
 
-        // PENTING: Perbaiki logic index saat di pass ke action button supaya hapus/edit tidak salah sasaran karena array disortir
         let originalIndex = daftarAset.findIndex(orig => orig.id === a.id);
 
         mastH += `<tr style="${style}"><td><b>${a.nama}</b><br><small>${det}</small>${priceInfo}</td><td><small>${kl}</small></td><td><b>${formatRupiah(a.nilai)}</b></td><td>${grandTotal > 0 ? ((a.nilai / grandTotal) * 100).toFixed(1) : 0}%</td><td>${vis.badge}</td><td>${vis.nominal}</td><td class="action-cell"><button class="btn-mini-action btn-edit" onclick="siapkanEditAset(${originalIndex})">✏️</button><button class="btn-mini-action btn-delete" onclick="hapusAset(${originalIndex})">🗑️</button></td></tr>`;
@@ -449,16 +445,14 @@ function updatePerformaUI(currentTotal = null, history = null) {
     const today = new Date(getWIBDateString());
     let targetDate = new Date(today);
 
-    // Hitung tanggal target mundur ke belakang
     if (period === '1W') targetDate.setDate(today.getDate() - 7);
     else if (period === '1M') targetDate.setMonth(today.getMonth() - 1);
-    else if (period === 'YTD') { targetDate = new Date(today.getFullYear(), 0, 1); } // 1 Jan Tahun Ini
-    else { targetDate.setDate(today.getDate() - 1); } // 1D Kemarin
+    else if (period === 'YTD') { targetDate = new Date(today.getFullYear(), 0, 1); }
+    else { targetDate.setDate(today.getDate() - 1); }
 
     let prevTotal = 0;
     let targetTime = targetDate.getTime();
 
-    // Cari data history yang paling mendekati target tanggal
     let foundMatch = false;
     for (let i = history.length - 1; i >= 0; i--) {
         let hDate = new Date(history[i].date).getTime();
@@ -469,9 +463,8 @@ function updatePerformaUI(currentTotal = null, history = null) {
         }
     }
 
-    if (!foundMatch && history.length > 0) prevTotal = history[0].total; // Fallback jika data tidak cukup tua
+    if (!foundMatch && history.length > 0) prevTotal = history[0].total;
 
-    // Khusus 1D pastikan ambil array 1 index sebelumnya
     if (period === '1D') {
         const i = history.findIndex(x => x.date === getWIBDateString());
         if (i > 0) prevTotal = history[i - 1].total;
@@ -489,7 +482,6 @@ function updatePerformaUI(currentTotal = null, history = null) {
     let cl = d >= 0 ? '#00c853' : '#ff1744';
     let ic = d >= 0 ? '▲' : '▼';
 
-    // Ganti UI-nya!
     document.getElementById('perf-value').innerHTML = `<span style="color:${cl};">${ic} ${pc.toFixed(2)}%</span>`;
 }
 
@@ -514,7 +506,36 @@ function editGoal() { let c = localStorage.getItem('financial_goal') || 10000000
 function editExpense() { let c = localStorage.getItem('monthly_expense') || 0, i = prompt("Pengeluaran (Rp):", c); if (i !== null) { let v = parseFloat(i.replace(/[^0-9]/g, '')); if (!isNaN(v)) { localStorage.setItem('monthly_expense', v); updateRunwayUI(); } } } function updateRunwayUI() { let e = parseFloat(localStorage.getItem('monthly_expense')) || 0; document.getElementById('expenseLabel').innerText = formatRupiah(e); let t = daftarAset.reduce((s, i) => s + (!isNaN(i.nilai) && i.nilai > 0 ? i.nilai : 0), 0), r = document.getElementById('runwayResult'), s = document.getElementById('runwayStatus'); if (e <= 0) { r.innerText = "-"; s.className = "status-badge status-gray"; return; } let m = t / e, y = Math.floor(m / 12), rm = (m % 12).toFixed(1); r.innerText = isPrivacyMode ? "**" : y > 0 ? `${y} Thn ${rm} Bln` : `${m.toFixed(1)} Bulan`; if (m < 3) { s.className = "status-badge status-red"; s.innerText = "BAHAYA"; } else if (m < 6) { s.className = "status-badge status-yellow"; s.innerText = "WASPADA"; } else { s.className = "status-badge status-green"; s.innerText = "AMAN"; } }
 function getRebalanceTargets() { let s = localStorage.getItem('target_allocation'); return s ? JSON.parse(s) : { 'reksa': 20, 'kas': 20, 'saham': 20, 'komo': 20, 'kripto': 20 }; } function saveTargetInput(k, v) { let t = getRebalanceTargets(); t[k] = parseFloat(v) || 0; localStorage.setItem('target_allocation', JSON.stringify(t)); renderRebalancingTable(); } function resetTargets() { localStorage.removeItem('target_allocation'); renderRebalancingTable(); } function renderRebalancingTable() { const b = document.getElementById('rebalanceBody'); if (!b) return; let tg = getRebalanceTargets(), tot = daftarAset.reduce((s, i) => s + (!isNaN(i.nilai) && i.nilai > 0 ? i.nilai : 0), 0), cS = {}; for (let k in dataKategori) cS[k] = 0; daftarAset.forEach(a => { if (!isNaN(a.nilai) && a.nilai > 0 && cS[a.kategori] !== undefined) cS[a.kategori] += a.nilai }); let h = "", tP = 0; for (let k in dataKategori) { let l = dataKategori[k].label, tp = tg[k] || 0; tP += tp; let idl = tot * (tp / 100), act = cS[k] || 0, df = idl - act, acP = tot > 0 ? (act / tot) * 100 : 0; let txt = "-"; if (Math.abs(df) > (tot * 0.01)) { txt = df > 0 ? `<span class="action-buy">BELI (+${formatRupiah(df)})</span>` : `<span class="action-sell">JUAL (${formatRupiah(df)})</span>`; } else txt = `<span class="action-ok">OK</span>`; if (isPrivacyMode && Math.abs(df) > 0) txt = "***"; h += `<tr><td>${l}</td><td><input type="number" class="rebalance-input" value="${tp}" onchange="saveTargetInput('${k}',this.value)">%</td><td>${acP.toFixed(1)}%</td><td>${txt}</td></tr>`; } b.innerHTML = h; document.getElementById('targetSumLabel').innerText = `Total: ${tP}%`; }
 function setupInputMasking() { ['inputNilai', 'nominalTransaksi'].forEach(id => { let el = document.getElementById(id); if (el) { el.type = "text"; el.addEventListener('keyup', function () { let v = this.value.replace(/[^0-9]/g, ''); if (document.getElementById('inputCurrency')?.value === 'USD') { this.value = v; return; } if (v) this.value = new Intl.NumberFormat('id-ID').format(v); }); } }); } function cleanRupiah(v) { if (!v) return 0; return parseFloat(v.toString().replace(/\./g, '')); }
-function prosesTransaksi() { let i = document.getElementById('pilihAsetTransaksi').value, t = document.getElementById('jenisTransaksi').value, n = cleanRupiah(document.getElementById('nominalTransaksi').value); if (!daftarAset[i] || isNaN(n) || n <= 0) { showToast("Nominal salah!", "error"); return; } if (t === 'masuk') daftarAset[i].nilai += n; else { if (daftarAset[i].nilai < n) { showToast("Saldo tidak cukup!", "error"); return; } daftarAset[i].nilai -= n; if (daftarAset[i].subJenis === 'Emas Batangan' && daftarAset[i].berat > 0 && hargaEmasLive > 0) daftarAset[i].berat -= (n / hargaEmasLive); if (daftarAset[i].url && daftarAset[i].url.includes('bibit') && daftarAset[i].berat > 0 && daftarAset[i].lastPrice > 0) daftarAset[i].berat -= (n / daftarAset[i].lastPrice); if (daftarAset[i].ticker && daftarAset[i].lastPrice > 0) daftarAset[i].lot -= (n / (daftarAset[i].lastPrice * 100)); } simpanDataKeStorage(); tutupModal('modalTransaksi'); updateTampilan(); showToast("Saldo diperbarui", "success"); triggerAutoBackup(); }
+
+// LOGIKA TRANSAKSI DIVIDEN & TOP UP
+function prosesTransaksi() {
+    let i = document.getElementById('pilihAsetTransaksi').value,
+        t = document.getElementById('jenisTransaksi').value,
+        n = cleanRupiah(document.getElementById('nominalTransaksi').value);
+
+    if (!daftarAset[i] || isNaN(n) || n <= 0) {
+        showToast("Nominal salah!", "error"); return;
+    }
+
+    // Jika Top Up atau Dividen/Bunga (Sifatnya menambah saldo)
+    if (t === 'masuk' || t === 'dividen') {
+        daftarAset[i].nilai += n;
+    } else {
+        // Logika Tarik/Jual
+        if (daftarAset[i].nilai < n) { showToast("Saldo tidak cukup!", "error"); return; }
+        daftarAset[i].nilai -= n;
+        if (daftarAset[i].subJenis === 'Emas Batangan' && daftarAset[i].berat > 0 && hargaEmasLive > 0) daftarAset[i].berat -= (n / hargaEmasLive);
+        if (daftarAset[i].url && daftarAset[i].url.includes('bibit') && daftarAset[i].berat > 0 && daftarAset[i].lastPrice > 0) daftarAset[i].berat -= (n / daftarAset[i].lastPrice);
+        if (daftarAset[i].ticker && daftarAset[i].lastPrice > 0) daftarAset[i].lot -= (n / (daftarAset[i].lastPrice * 100));
+    }
+
+    simpanDataKeStorage();
+    tutupModal('modalTransaksi');
+    updateTampilan();
+    showToast("Saldo diperbarui", "success");
+    triggerAutoBackup();
+}
+
 function simpanDataKeStorage() { localStorage.setItem('portfolio_assets_v1', JSON.stringify(daftarAset)); localStorage.setItem('local_last_updated', new Date().toISOString()); }
 function getAssetTrend(id, v) { let h = JSON.parse(localStorage.getItem('portfolio_history')) || [], t = getWIBDateString(), i = h.findIndex(x => x.date === t); if (i <= 0) return 0; const p = h[i - 1]; if (p.details && p.details[id] !== undefined) { let pv = p.details[id]; if (pv === 0) return v > 0 ? 100 : 0; return ((v - pv) / pv) * 100; } return 0; }
 function isiDropdownKategori() { let el = document.getElementById('inputKategori'); el.innerHTML = ""; for (let k in dataKategori) { let o = document.createElement('option'); o.value = k; o.innerText = dataKategori[k].label; el.appendChild(o); } } function updateSubKategori() { let k = document.getElementById('inputKategori').value, el = document.getElementById('inputSubJenis'); el.innerHTML = ""; dataKategori[k].jenis.forEach(j => { let o = document.createElement('option'); o.value = j; o.innerText = j; el.appendChild(o); }); cekModeInput(); } function isiNamaOtomatis(n, j) { let i = document.getElementById('inputNama'); i.value = j.includes('Bank') ? `Bank ${n}` : n; i.style.borderColor = "#3d5afe"; setTimeout(() => i.style.borderColor = "#444", 300); } function toggleInputBibit() { let c = document.getElementById('checkAutoBibit').checked, bn = document.getElementById('blokInputNormal'), bb = document.getElementById('blokInputBibitUrl'); if (c) { bn.classList.add('hidden'); bb.classList.remove('hidden'); } else { bn.classList.remove('hidden'); bb.classList.add('hidden'); } } function updateDropdownAset() { let el = document.getElementById('pilihAsetTransaksi'); el.innerHTML = ""; daftarAset.forEach((a, i) => { if (!isNaN(a.nilai) && a.nilai > 0 || (a.ticker && a.lot > 0)) { let o = document.createElement('option'); o.value = i; o.innerText = `${a.nama} (${formatRupiah(a.nilai)})`; el.appendChild(o); } }); }
