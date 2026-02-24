@@ -199,27 +199,30 @@
         </div>
     </div>
 
-    <div class="header-container">
-        <div>
-            <h2>Aset Saya</h2>
+    <div class="header-container"
+        style="display: flex; flex-direction: column; align-items: center; gap: 15px; margin-bottom: 30px;">
+        <div style="width: 100%; text-align: left;">
+            <h2 style="margin: 0;">Aset Saya</h2>
         </div>
-        <div style="text-align:right;">
-            <div style="display:flex; align-items:center; justify-content:flex-end; gap:10px;">
+        <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+            <div style="display:flex; align-items:center; gap:8px;">
                 <small style="color:#a0a0a0">Total Kekayaan Bersih</small>
                 <button class="btn-icon" onclick="togglePrivacy()" title="Sensor">👁️</button>
             </div>
-            <span id="grandTotalDisplay" style="font-size:1.8rem; font-weight:bold; color:#fff;">Rp 0</span>
+            <span id="grandTotalDisplay" style="font-size:2.4rem; font-weight:bold; color:#fff; margin-top: 5px;">Rp
+                0</span>
 
             <div
-                style="margin-top: 5px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; justify-content: flex-end;">
+                style="margin-top: 10px; display: inline-flex; align-items: center; gap: 8px; justify-content: center; background: #1e1e1e; padding: 6px 16px; border-radius: 20px; border: 1px solid #333; width: fit-content; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
                 <select id="perfPeriod" onchange="updatePerformaUI()"
-                    style="background: #1e1e1e; border: 1px solid #333; color: #a0a0a0; border-radius: 4px; padding: 3px; font-size: 0.8rem; cursor: pointer;">
+                    style="background: transparent; border: none; color: #a0a0a0; font-size: 0.85rem; cursor: pointer; outline: none; padding-right: 5px;">
                     <option value="1D">Vs Kemarin</option>
                     <option value="1W">Vs 1 Minggu</option>
                     <option value="1M">Vs 1 Bulan</option>
                     <option value="YTD">Vs Awal Tahun</option>
                 </select>
-                <span id="perf-value" style="color: #666; font-weight: bold;">-</span>
+                <span style="color: #444;">|</span>
+                <span id="perf-value" style="font-size: 0.85rem; font-weight: bold;">-</span>
             </div>
         </div>
     </div>
@@ -466,6 +469,7 @@
             <div class="form-group"><label>Jenis Transaksi</label><select id="jenisTransaksi">
                     <option value="masuk">🟢 Top Up</option>
                     <option value="keluar">🔴 Tarik</option>
+                    <option value="dividen">🔵 Dividen / Bunga</option>
                 </select></div>
             <div class="form-group"><label>Jumlah Nominal (Rp)</label><input type="text" id="nominalTransaksi"></div>
             <button class="btn-submit" style="background:#ff9800; color:#000" onclick="prosesTransaksi()">Simpan
