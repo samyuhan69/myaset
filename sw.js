@@ -1,4 +1,4 @@
-const CACHE_NAME = "porto-v2";
+const CACHE_NAME = "myaset-v1";
 const urlsToCache = [
   "./",
   "./index.html",
