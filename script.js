@@ -16,6 +16,10 @@ let pieChart = null;
 let editIndex = -1;
 let isPrivacyMode = localStorage.getItem('privacy_mode') === 'true';
 
+// Variable Sorting
+let currentSortCol = 'nama';
+let currentSortAsc = true;
+
 let tokenClient;
 let gapiInited = false;
 let gisInited = false;
@@ -36,7 +40,7 @@ const bankData = {
 };
 
 document.addEventListener("DOMContentLoaded", function () {
-    loadDataAset(); // Akan otomatis membersihkan nilai NaN jika ada
+    loadDataAset();
     isiDropdownKategori();
     updateSubKategori();
     setupInputMasking();
@@ -46,7 +50,7 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(() => { renderLineChart(); renderPieChart(); renderRebalancingTable(); }, 500);
 
     // FETCH HARGA START via WORKER LOKAL
-    console.log("🚀 Engine Harga v11 (Dual-Engine Saham + Self Healing) Dimulai...");
+    console.log("🚀 Engine Harga v11 & Fitur Sorting/Performa Dimulai...");
     cekHargaHarian();
 
     setTimeout(initGoogleDrive, 2000);
@@ -65,9 +69,7 @@ function getWIBDateString() {
 // ==========================================
 
 async function cekHargaHarian() {
-    console.log("🔄 Meminta harga baru lewat Worker lokal...");
     const today = getWIBDateString();
-
     await startGoldEngine(today);
     await fetchAllStockPrices();
     await fetchAllBibitPrices();
@@ -91,7 +93,6 @@ async function startGoldEngine(d) {
     isFetching = true;
     const l = document.getElementById('livePriceLabel');
     if (l) l.innerText = "⏳..";
-
     const target = 'https://www.logammulia.com/id/harga-emas-hari-ini';
 
     try {
@@ -112,9 +113,7 @@ async function startGoldEngine(d) {
         if (foundPrice === 0 || isNaN(foundPrice)) {
             const regexEmas = /1\s*gr<\/td>\s*<td[^>]*>\s*([0-9.,]+)/i;
             const match = html.match(regexEmas);
-            if (match && match[1]) {
-                foundPrice = parseFloat(match[1].replace(/[^0-9]/g, ''));
-            }
+            if (match && match[1]) foundPrice = parseFloat(match[1].replace(/[^0-9]/g, ''));
         }
 
         if (foundPrice > 500000) {
@@ -125,7 +124,6 @@ async function startGoldEngine(d) {
         } else {
             throw new Error("Pola harga emas gagal");
         }
-
     } catch (e) {
         const c = JSON.parse(localStorage.getItem('emas_cache_v2'));
         if (c && c.price > 0) {
@@ -140,13 +138,13 @@ async function startGoldEngine(d) {
     }
 }
 
-// --- ENGINE SAHAM (DUAL ENGINE TAHAN BANTING) ---
+// --- ENGINE SAHAM ---
 async function fetchAllStockPrices() {
     let adaUpdate = false;
     for (let i = 0; i < daftarAset.length; i++) {
         let aset = daftarAset[i];
         if (aset.kategori === 'saham' && aset.ticker && aset.lot > 0) {
-            await new Promise(r => setTimeout(r, 1000)); // Jeda agar tidak dianggap spam
+            await new Promise(r => setTimeout(r, 1000));
             const success = await fetchStockPrice(i, aset.ticker);
             if (success) adaUpdate = true;
         }
@@ -158,14 +156,12 @@ async function fetchStockPrice(index, ticker) {
     let originalTicker = ticker.toUpperCase().trim();
     let yahooTicker = originalTicker;
 
-    // Pastikan pakai format JK untuk Indonesia
     if (!yahooTicker.includes('.JK') && yahooTicker.length <= 4) {
         yahooTicker = yahooTicker + ".JK";
     }
 
     let foundPrice = 0;
 
-    // METODE 1: API JSON Yahoo Spark (Paling jarang diblokir CF Worker)
     try {
         const apiSpark = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${yahooTicker}&range=1d`;
         const data = await fetchViaProxy(apiSpark, 'json');
@@ -175,11 +171,8 @@ async function fetchStockPrice(index, ticker) {
                 foundPrice = parseFloat(res[0].meta.regularMarketPrice);
             }
         }
-    } catch (e) {
-        console.warn(`[Saham] API Spark gagal untuk ${ticker}, mencoba metode 2...`);
-    }
+    } catch (e) { }
 
-    // METODE 2: Fallback ke Google Finance pakai DOMParser (Lebih aman dari regex)
     if (!foundPrice || isNaN(foundPrice)) {
         try {
             let googleTicker = originalTicker.replace('.JK', '') + ':IDX';
@@ -204,25 +197,17 @@ async function fetchStockPrice(index, ticker) {
                     foundPrice = parseFloat(textPrice.replace(/[^0-9]/g, ''));
                 }
             }
-        } catch (e) {
-            console.warn(`[Saham] Scraping Google Finance juga gagal:`, e.message);
-        }
+        } catch (e) { }
     }
 
-    // PENYIMPANAN AMAN (Mencegah NaN)
     if (foundPrice && !isNaN(foundPrice) && foundPrice > 0) {
-        console.log(`✅ Saham ${originalTicker} Updated: ${foundPrice}`);
         let aset = daftarAset[index];
         aset.lastPrice = foundPrice;
-
         let safeLot = isNaN(aset.lot) ? 0 : aset.lot;
         aset.nilai = safeLot * 100 * foundPrice;
-
         aset.lastUpdate = getWIBDateString();
         return true;
     }
-
-    console.error(`❌ Gagal update saham ${originalTicker}`);
     return false;
 }
 
@@ -269,16 +254,11 @@ async function fetchSingleBibit(index, url, isPreview = false) {
         }
 
         if (foundPrice > 0) {
-            if (isPreview && label) {
-                label.innerText = formatRupiah(foundPrice);
-                label.style.color = "#00c853";
-                return;
-            }
+            if (isPreview && label) { label.innerText = formatRupiah(foundPrice); label.style.color = "#00c853"; return; }
             let aset = daftarAset[index];
             aset.nilai = aset.berat * foundPrice;
             aset.lastPrice = foundPrice;
             aset.lastUpdate = getWIBDateString();
-            console.log(`✅ Bibit Updated: ${foundPrice}`);
             return true;
         }
     } catch (e) {
@@ -298,9 +278,6 @@ function recalculasiAsetLive() {
     if (change) { simpanDataKeStorage(); updateTampilan(); }
 }
 
-// ==========================================
-// SISA KODE (UI, LOGIC, GOOGLE DRIVE)
-// ==========================================
 
 function loadDataAset() {
     const d = localStorage.getItem('portfolio_assets_v1');
@@ -310,7 +287,6 @@ function loadDataAset() {
             let u = false;
             daftarAset.forEach(a => {
                 if (!dataKategori[a.kategori]) { a.kategori = 'reksa'; u = true }
-                // PEMBERSIH NAN OTOMATIS (Self-Healing)
                 if (isNaN(a.nilai) || a.nilai === null) { a.nilai = 0; u = true; }
                 if (isNaN(a.lastPrice) || a.lastPrice === null) { a.lastPrice = 0; u = true; }
                 if (isNaN(a.lot) || a.lot === null) { a.lot = 0; u = true; }
@@ -318,17 +294,70 @@ function loadDataAset() {
             });
             if (u) simpanDataKeStorage();
             updateTampilan();
-        } catch (e) {
-            console.error("Data korup", e);
-        }
+        } catch (e) { console.error("Data korup", e); }
     }
 }
 
+// ==========================================
+// FITUR BARU: SORTING MASTER TABLE
+// ==========================================
+function sortMasterTable(col) {
+    if (currentSortCol === col) {
+        currentSortAsc = !currentSortAsc; // Balik arah sort jika kolom yang sama diklik
+    } else {
+        currentSortCol = col;
+        currentSortAsc = true; // Default ascending jika kolom baru
+    }
+    updateTampilan();
+}
+
 function updateTampilan() {
-    daftarAset.sort((a, b) => a.nama.localeCompare(b.nama));
-    // Aman dari perhitungan NaN
+    // Hitung grandTotal & Trend SEBELUM melakukan Sorting
     let grandTotal = daftarAset.reduce((s, i) => s + (!isNaN(i.nilai) && i.nilai > 0 ? i.nilai : 0), 0);
     if (isNaN(grandTotal)) grandTotal = 0;
+
+    daftarAset.forEach(a => {
+        a.currentTrend = getAssetTrend(a.id, a.nilai);
+    });
+
+    // === LOGIKA SORTING ===
+    daftarAset.sort((a, b) => {
+        let valA, valB;
+
+        if (currentSortCol === 'nama') {
+            valA = a.nama.toLowerCase();
+            valB = b.nama.toLowerCase();
+        } else if (currentSortCol === 'kategori') {
+            valA = a.kategori;
+            valB = b.kategori;
+        } else if (currentSortCol === 'nilai' || currentSortCol === 'porsi') {
+            valA = isNaN(a.nilai) ? 0 : a.nilai;
+            valB = isNaN(b.nilai) ? 0 : b.nilai;
+        } else if (currentSortCol === 'trend') {
+            valA = isNaN(a.currentTrend) ? 0 : a.currentTrend;
+            valB = isNaN(b.currentTrend) ? 0 : b.currentTrend;
+        } else if (currentSortCol === 'profit') {
+            let pvA = a.nilai / (1 + (isNaN(a.currentTrend) ? 0 : a.currentTrend) / 100);
+            let pvB = b.nilai / (1 + (isNaN(b.currentTrend) ? 0 : b.currentTrend) / 100);
+            valA = a.nilai - pvA;
+            valB = b.nilai - pvB;
+        }
+
+        if (valA < valB) return currentSortAsc ? -1 : 1;
+        if (valA > valB) return currentSortAsc ? 1 : -1;
+        return 0;
+    });
+
+    // Update UI Header Panah Sort
+    ['nama', 'kategori', 'nilai', 'porsi', 'trend', 'profit'].forEach(c => {
+        let el = document.getElementById('sort-' + c);
+        if (el) {
+            el.innerHTML = (currentSortCol === c)
+                ? (currentSortAsc ? '<span style="color:#00c853">▲</span>' : '<span style="color:#ff1744">▼</span>')
+                : '<span style="color:#444">↕️</span>';
+        }
+    });
+    // ========================
 
     document.getElementById('grandTotalDisplay').innerText = formatRupiah(grandTotal);
     simpanHistoryHarian(grandTotal);
@@ -343,7 +372,6 @@ function updateTampilan() {
         if (a.nilai <= 0 && !a.ticker) return;
         let k = dataKategori[a.kategori] ? a.kategori : 'reksa';
         sum[k] += a.nilai;
-        a.currentTrend = getAssetTrend(a.id, a.nilai);
         if (!subSum[a.subJenis]) subSum[a.subJenis] = { t: 0, w: 0 };
         subSum[a.subJenis].t += a.nilai;
         subSum[a.subJenis].w += ((isNaN(a.currentTrend) ? 0 : a.currentTrend) * a.nilai);
@@ -351,10 +379,7 @@ function updateTampilan() {
 
     for (let k in sum) {
         let el = document.getElementById(`sum-${k}`), ep = document.getElementById(`pct-${k}`);
-        if (el) {
-            el.innerText = formatRupiah(sum[k]);
-            ep.innerText = grandTotal > 0 ? ((sum[k] / grandTotal) * 100).toFixed(1) + '%' : '0%';
-        }
+        if (el) { el.innerText = formatRupiah(sum[k]); ep.innerText = grandTotal > 0 ? ((sum[k] / grandTotal) * 100).toFixed(1) + '%' : '0%'; }
     }
 
     let subH = "";
@@ -380,51 +405,102 @@ function updateTampilan() {
         else if (a.ticker) det = `<span style="color:#29b6f6">📈 ${a.ticker} (${a.lot} Lot)</span>`;
         let kl = dataKategori[a.kategori] ? dataKategori[a.kategori].label : "Lain";
         let priceInfo = "";
-        if (a.lastPrice && a.lastPrice > 0) {
-            priceInfo = `<br><small style="color:#666; font-size:0.65rem;">Harga: ${new Intl.NumberFormat('id-ID').format(a.lastPrice)}</small>`;
-        }
-        mastH += `<tr style="${style}"><td><b>${a.nama}</b><br><small>${det}</small>${priceInfo}</td><td><small>${kl}</small></td><td><b>${formatRupiah(a.nilai)}</b></td><td>${grandTotal > 0 ? ((a.nilai / grandTotal) * 100).toFixed(1) : 0}%</td><td>${vis.badge}</td><td>${vis.nominal}</td><td class="action-cell"><button class="btn-mini-action btn-edit" onclick="siapkanEditAset(${i})">✏️</button><button class="btn-mini-action btn-delete" onclick="hapusAset(${i})">🗑️</button></td></tr>`;
+        if (a.lastPrice && a.lastPrice > 0) priceInfo = `<br><small style="color:#666; font-size:0.65rem;">Harga: ${new Intl.NumberFormat('id-ID').format(a.lastPrice)}</small>`;
+
+        // PENTING: Perbaiki logic index saat di pass ke action button supaya hapus/edit tidak salah sasaran karena array disortir
+        let originalIndex = daftarAset.findIndex(orig => orig.id === a.id);
+
+        mastH += `<tr style="${style}"><td><b>${a.nama}</b><br><small>${det}</small>${priceInfo}</td><td><small>${kl}</small></td><td><b>${formatRupiah(a.nilai)}</b></td><td>${grandTotal > 0 ? ((a.nilai / grandTotal) * 100).toFixed(1) : 0}%</td><td>${vis.badge}</td><td>${vis.nominal}</td><td class="action-cell"><button class="btn-mini-action btn-edit" onclick="siapkanEditAset(${originalIndex})">✏️</button><button class="btn-mini-action btn-delete" onclick="hapusAset(${originalIndex})">🗑️</button></td></tr>`;
     }
     document.getElementById('masterTableBody').innerHTML = cA === 0 ? "<tr><td colspan='7' style='text-align:center; padding:20px; color:#666;'>Dompet Kosong</td></tr>" : mastH;
 }
 
+
+// ==========================================
+// FITUR BARU: PERFORMA JANGKA PANJANG UI
+// ==========================================
 function simpanHistoryHarian(t) {
-    if (isNaN(t) || t === null) t = 0; // Filter NaN masuk history
+    if (isNaN(t) || t === null) t = 0;
     const d = getWIBDateString();
     let h = JSON.parse(localStorage.getItem('portfolio_history')) || [], i = h.findIndex(x => x.date === d), s = {};
     daftarAset.forEach(a => { if (!isNaN(a.nilai) && a.nilai > 0) s[a.id] = a.nilai; });
+
     if (i >= 0) { h[i].total = t; h[i].details = s; }
     else h.push({ date: d, total: t, details: s });
+
     h.sort((a, b) => new Date(a.date) - new Date(b.date));
     localStorage.setItem('portfolio_history', JSON.stringify(h));
-    hitungPerformaGlobal(t, h);
+
+    updatePerformaUI(t, h);
     if (!document.getElementById('monthPicker').value) renderLineChart();
 }
 
-function hitungPerformaGlobal(c, h) {
-    if (h.length < 2) return;
-    const t = getWIBDateString(), i = h.findIndex(x => x.date === t), p = i - 1;
-    if (p >= 0) {
-        let prevTotal = h[p].total;
-        if (isNaN(prevTotal) || prevTotal <= 0) {
-            document.getElementById('perf-1d').innerHTML = `Vs Kemarin: -`;
-            return;
-        }
-        let d = c - prevTotal, pc = (d / prevTotal) * 100;
-        if (isNaN(pc)) pc = 0;
-        let cl = d >= 0 ? '#00c853' : '#ff1744', ic = d >= 0 ? '▲' : '▼';
-        document.getElementById('perf-1d').innerHTML = `Vs Kemarin: <span style="color:${cl};font-weight:bold;">${ic} ${pc.toFixed(2)}%</span>`;
+function updatePerformaUI(currentTotal = null, history = null) {
+    if (!history) history = JSON.parse(localStorage.getItem('portfolio_history')) || [];
+    if (history.length < 2) return;
+
+    if (currentTotal === null) {
+        const d = getWIBDateString();
+        const idx = history.findIndex(x => x.date === d);
+        currentTotal = idx >= 0 ? history[idx].total : history[history.length - 1].total;
     }
+
+    const period = document.getElementById('perfPeriod').value;
+    const today = new Date(getWIBDateString());
+    let targetDate = new Date(today);
+
+    // Hitung tanggal target mundur ke belakang
+    if (period === '1W') targetDate.setDate(today.getDate() - 7);
+    else if (period === '1M') targetDate.setMonth(today.getMonth() - 1);
+    else if (period === 'YTD') { targetDate = new Date(today.getFullYear(), 0, 1); } // 1 Jan Tahun Ini
+    else { targetDate.setDate(today.getDate() - 1); } // 1D Kemarin
+
+    let prevTotal = 0;
+    let targetTime = targetDate.getTime();
+
+    // Cari data history yang paling mendekati target tanggal
+    let foundMatch = false;
+    for (let i = history.length - 1; i >= 0; i--) {
+        let hDate = new Date(history[i].date).getTime();
+        if (hDate <= targetTime) {
+            prevTotal = history[i].total;
+            foundMatch = true;
+            break;
+        }
+    }
+
+    if (!foundMatch && history.length > 0) prevTotal = history[0].total; // Fallback jika data tidak cukup tua
+
+    // Khusus 1D pastikan ambil array 1 index sebelumnya
+    if (period === '1D') {
+        const i = history.findIndex(x => x.date === getWIBDateString());
+        if (i > 0) prevTotal = history[i - 1].total;
+    }
+
+    if (isNaN(prevTotal) || prevTotal <= 0) {
+        document.getElementById('perf-value').innerHTML = `-`;
+        return;
+    }
+
+    let d = currentTotal - prevTotal;
+    let pc = (d / prevTotal) * 100;
+    if (isNaN(pc)) pc = 0;
+
+    let cl = d >= 0 ? '#00c853' : '#ff1744';
+    let ic = d >= 0 ? '▲' : '▼';
+
+    // Ganti UI-nya!
+    document.getElementById('perf-value').innerHTML = `<span style="color:${cl};">${ic} ${pc.toFixed(2)}%</span>`;
 }
 
-// SISA FUNGSI DI BAWAH INI TETAP SAMA SEPERTI SEBELUMNYA
+
 function siapkanTambahAset() { editIndex = -1; resetForm(); document.getElementById('modalTitle').innerText = "➕ Aset Baru"; document.getElementById('btnSimpan').innerText = "Simpan Aset"; document.getElementById('checkAutoBibit').checked = false; toggleInputBibit(); bukaModal('modalTambah'); }
-function siapkanEditAset(index) { editIndex = index; const aset = daftarAset[index]; document.getElementById('inputNama').value = aset.nama; document.getElementById('inputKategori').value = aset.kategori; updateSubKategori(); document.getElementById('inputSubJenis').value = aset.subJenis; cekModeInput(); document.getElementById('inputBeratEmas').value = ''; document.getElementById('inputTicker').value = ''; document.getElementById('inputLot').value = ''; document.getElementById('inputNilai').value = ''; if (aset.subJenis === 'Emas Batangan') { document.getElementById('inputBeratEmas').value = aset.berat; } else if (aset.ticker && aset.lot) { document.getElementById('inputTicker').value = aset.ticker; document.getElementById('inputLot').value = aset.lot; } else if (aset.url && aset.url.includes('bibit.id')) { document.getElementById('checkAutoBibit').checked = true; toggleInputBibit(); document.getElementById('inputUrlBibit').value = aset.url; document.getElementById('inputUnitBibit').value = aset.berat; fetchSingleBibit(index, aset.url, true); } else { document.getElementById('inputNilai').value = new Intl.NumberFormat('id-ID').format(aset.nilai); } document.getElementById('modalTitle').innerText = "✏️ Edit Aset"; document.getElementById('btnSimpan').innerText = "Update"; bukaModal('modalTambah'); }
+function siapkanEditAset(originalIndex) { editIndex = originalIndex; const aset = daftarAset[originalIndex]; document.getElementById('inputNama').value = aset.nama; document.getElementById('inputKategori').value = aset.kategori; updateSubKategori(); document.getElementById('inputSubJenis').value = aset.subJenis; cekModeInput(); document.getElementById('inputBeratEmas').value = ''; document.getElementById('inputTicker').value = ''; document.getElementById('inputLot').value = ''; document.getElementById('inputNilai').value = ''; if (aset.subJenis === 'Emas Batangan') { document.getElementById('inputBeratEmas').value = aset.berat; } else if (aset.ticker && aset.lot) { document.getElementById('inputTicker').value = aset.ticker; document.getElementById('inputLot').value = aset.lot; } else if (aset.url && aset.url.includes('bibit.id')) { document.getElementById('checkAutoBibit').checked = true; toggleInputBibit(); document.getElementById('inputUrlBibit').value = aset.url; document.getElementById('inputUnitBibit').value = aset.berat; fetchSingleBibit(originalIndex, aset.url, true); } else { document.getElementById('inputNilai').value = new Intl.NumberFormat('id-ID').format(aset.nilai); } document.getElementById('modalTitle').innerText = "✏️ Edit Aset"; document.getElementById('btnSimpan').innerText = "Update"; bukaModal('modalTambah'); }
 function resetForm() { document.getElementById('inputNama').value = ''; document.getElementById('inputNilai').value = ''; document.getElementById('inputBeratEmas').value = ''; document.getElementById('inputUrlBibit').value = ''; document.getElementById('inputUnitBibit').value = ''; document.getElementById('inputTicker').value = ''; document.getElementById('inputLot').value = ''; document.getElementById('checkAutoBibit').checked = false; toggleInputBibit(); }
 function simpanAsetBaru() { let nama = document.getElementById('inputNama').value; let kat = document.getElementById('inputKategori').value; let subJenis = document.getElementById('inputSubJenis').value; let currency = document.getElementById('inputCurrency').value; let nilaiInput = 0; let beratInput = 0; let customUrl = ""; let tickerInput = ""; if (subJenis === 'Emas Batangan') { beratInput = parseFloat(document.getElementById('inputBeratEmas').value); if (hargaEmasLive > 0) { nilaiInput = beratInput * hargaEmasLive; } else { nilaiInput = 0; } } else if (kat === 'saham') { tickerInput = document.getElementById('inputTicker').value.toUpperCase().trim(); beratInput = parseFloat(document.getElementById('inputLot').value); if (!tickerInput || isNaN(beratInput) || beratInput <= 0) { showToast("Isi Kode & Lot yang benar!", "error"); return; } if (editIndex >= 0 && !isNaN(daftarAset[editIndex].lastPrice)) { nilaiInput = beratInput * 100 * daftarAset[editIndex].lastPrice; } else { nilaiInput = 0; } if (!nama) nama = tickerInput; } else if (document.getElementById('checkAutoBibit').checked) { customUrl = document.getElementById('inputUrlBibit').value; beratInput = parseFloat(document.getElementById('inputUnitBibit').value); if (!customUrl.includes('bibit.id')) { showToast("Link harus dari bibit.id!", "error"); return; } nilaiInput = 0; } else { let raw = document.getElementById('inputNilai').value; if (currency === 'USD') { nilaiInput = parseFloat(raw) * hargaUSDLive; } else { nilaiInput = cleanRupiah(raw); } } if (!nama) { showToast("Isi nama aset!", "error"); return; } let newData = { id: (editIndex >= 0) ? daftarAset[editIndex].id : Date.now(), nama, kategori: kat, subJenis, nilai: isNaN(nilaiInput) ? 0 : nilaiInput, berat: isNaN(beratInput) ? 0 : beratInput, url: customUrl, ticker: tickerInput, lot: (kat === 'saham') ? beratInput : 0, lastPrice: (editIndex >= 0) ? daftarAset[editIndex].lastPrice : 0, lastUpdate: (editIndex >= 0) ? daftarAset[editIndex].lastUpdate : getWIBDateString() }; if (editIndex >= 0) { daftarAset[editIndex] = newData; showToast("Diperbarui!", "success"); } else { daftarAset.push(newData); showToast("Aset ditambahkan", "success"); } simpanDataKeStorage(); resetForm(); tutupModal('modalTambah'); updateTampilan(); triggerAutoBackup(); if (customUrl) fetchSingleBibit(editIndex >= 0 ? editIndex : daftarAset.length - 1, customUrl); if (tickerInput) fetchStockPrice(editIndex >= 0 ? editIndex : daftarAset.length - 1, tickerInput); if (subJenis === 'Emas Batangan') startGoldEngine(getWIBDateString()); }
 function cekModeInput() { let k = document.getElementById('inputKategori').value; let j = document.getElementById('inputSubJenis').value; let bn = document.getElementById('blokInputNormal'), be = document.getElementById('blokInputEmas'); let bs = document.getElementById('blokInputSaham'), bb = document.getElementById('blokInputBibitUrl'); let bt = document.getElementById('toggleBibitContainer'), ar = document.getElementById('suggestionArea'); bn.classList.remove('hidden'); be.classList.add('hidden'); bs.classList.add('hidden'); bb.classList.add('hidden'); if (bt) bt.style.display = 'none'; ar.innerHTML = ""; document.getElementById('checkAutoBibit').checked = false; if (j === 'Emas Batangan') { bn.classList.add('hidden'); be.classList.remove('hidden'); } else if (k === 'saham') { bn.classList.add('hidden'); bs.classList.remove('hidden'); } else { if (k === 'reksa' && bt) bt.style.display = 'block'; let c = []; if (j.includes('Bank')) c = bankData.bank; else if (j.includes('E-Wallet')) c = bankData.wallet; if (c.length > 0) { let h = `<div class="suggestion-box">`; c.forEach(x => { h += `<div class="chip" onclick="isiNamaOtomatis('${x}','${j}')">${x}</div>`; }); h += `</div>`; ar.innerHTML = h; } } }
 function bukaModal(id) { document.getElementById(id).style.display = 'flex'; if (id === 'modalTransaksi') updateDropdownAset(); } function tutupModal(id) { document.getElementById(id).style.display = 'none'; }
-function hapusAset(index) { if (confirm(`Hapus "${daftarAset[index].nama}"?`)) { daftarAset.splice(index, 1); simpanDataKeStorage(); updateTampilan(); showToast("Aset dihapus", "info"); triggerAutoBackup(); } }
+function hapusAset(originalIndex) { if (confirm(`Hapus "${daftarAset[originalIndex].nama}"?`)) { daftarAset.splice(originalIndex, 1); simpanDataKeStorage(); updateTampilan(); showToast("Aset dihapus", "info"); triggerAutoBackup(); } }
 function showToast(message, type = 'success') { const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = `toast ${type}`; toast.innerHTML = `<span>${message}</span>`; container.appendChild(toast); setTimeout(() => { toast.style.animation = 'fadeOut 0.3s ease-out forwards'; toast.addEventListener('animationend', () => toast.remove()); }, 3000); }
 function renderTrend(p, n) { if (isPrivacyMode) return { badge: `<span class="trend-badge trend-up">***%</span>`, nominal: `<span class="trend-up">+Rp ***</span>` }; if (isNaN(p) || isNaN(n) || n === 0) return { badge: `<span class="trend-badge" style="color:#888; background:#333">-</span>`, nominal: `<span style="color:#888">-</span>` }; let pv = n / (1 + p / 100); let rp = n - pv; let c = p >= 0 ? 'trend-up' : 'trend-down'; let ic = p >= 0 ? '▲' : '▼'; return { badge: `<span class="trend-badge ${c}">${ic} ${Math.abs(p).toFixed(2)}%</span>`, nominal: `<span class="${c}">${p >= 0 ? '+' : ''}${formatRupiah(rp)}</span>` }; }
 function formatChartAxis(value) { if (isPrivacyMode) return '***'; if (value === 0) return '0'; if (Math.abs(value) >= 1e12) return Math.round(value / 1e12) + ' T'; if (Math.abs(value) >= 1e9) return Math.round(value / 1e9) + ' M'; if (Math.abs(value) >= 1e6) return Math.round(value / 1e6) + ' Jt'; return new Intl.NumberFormat('id-ID').format(value); }
