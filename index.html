@@ -36,6 +36,12 @@
             font-size: 0.9rem;
         }
 
+        /* Hover effect untuk kolom yang bisa di-sort */
+        th.sortable:hover {
+            background-color: #333;
+            color: #fff;
+        }
+
         table td:first-child,
         table th:first-child {
             white-space: nowrap;
@@ -73,7 +79,7 @@
             color: #fff;
         }
 
-        /* --- Style Khusus Kartu Cloud Sync (BARU) --- */
+        /* --- Style Khusus Kartu Cloud Sync --- */
         .cloud-card {
             width: 100%;
             background: #1e1e1e;
@@ -86,10 +92,8 @@
             flex-direction: column;
             gap: 15px;
             position: relative;
-            /* Untuk positioning */
         }
 
-        /* Di HP kartu melebar penuh */
         @media (max-width: 768px) {
             .cloud-card {
                 grid-column: 1 / -1;
@@ -99,7 +103,6 @@
         .cloud-header {
             display: flex;
             justify-content: space-between;
-            /* Judul kiri, Status kanan */
             align-items: center;
             width: 100%;
         }
@@ -113,7 +116,6 @@
             gap: 8px;
         }
 
-        /* Status Text (Tanpa Icon Bulat) */
         .status-text {
             font-size: 0.8rem;
             font-weight: 600;
@@ -122,29 +124,21 @@
             letter-spacing: 0.5px;
         }
 
-        /* Warna status saat online */
         .status-active {
             color: #00c853;
-            /* Hijau teks */
             text-shadow: 0 0 10px rgba(0, 200, 83, 0.3);
-            /* Sedikit glow */
         }
 
-        /* Tombol Logout (Di Bawah Center) */
         .btn-logout {
             background: #1e1e1e;
-            /* Warna dasar gelap */
             color: #ef5350;
-            /* Merah soft */
             border: 1px solid #ef5350;
             border-radius: 20px;
             padding: 8px 20px;
             font-size: 0.8rem;
             cursor: pointer;
             margin: 5px auto 0 auto;
-            /* Margin auto kiri-kanan agar center */
             display: none;
-            /* Hidden by default */
             width: fit-content;
             transition: all 0.2s;
         }
@@ -154,7 +148,6 @@
             color: #fff;
         }
 
-        /* Tombol Login Besar */
         .btn-gdrive {
             width: 100%;
             padding: 12px;
@@ -216,8 +209,17 @@
                 <button class="btn-icon" onclick="togglePrivacy()" title="Sensor">👁️</button>
             </div>
             <span id="grandTotalDisplay" style="font-size:1.8rem; font-weight:bold; color:#fff;">Rp 0</span>
-            <div style="margin-top: 5px; font-size: 0.85rem; display: flex; gap: 15px; justify-content: flex-end;">
-                <span id="perf-1d" style="color: #666;">Vs Kemarin: -</span>
+
+            <div
+                style="margin-top: 5px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; justify-content: flex-end;">
+                <select id="perfPeriod" onchange="updatePerformaUI()"
+                    style="background: #1e1e1e; border: 1px solid #333; color: #a0a0a0; border-radius: 4px; padding: 3px; font-size: 0.8rem; cursor: pointer;">
+                    <option value="1D">Vs Kemarin</option>
+                    <option value="1W">Vs 1 Minggu</option>
+                    <option value="1M">Vs 1 Bulan</option>
+                    <option value="YTD">Vs Awal Tahun</option>
+                </select>
+                <span id="perf-value" style="color: #666; font-weight: bold;">-</span>
             </div>
         </div>
     </div>
@@ -331,12 +333,18 @@
         <table>
             <thead>
                 <tr>
-                    <th>Nama Aset</th>
-                    <th>Kategori</th>
-                    <th>Total Nilai (Rp)</th>
-                    <th>Porsi</th>
-                    <th>Trend</th>
-                    <th>Est. Profit</th>
+                    <th class="sortable" onclick="sortMasterTable('nama')" style="cursor: pointer;"
+                        title="Klik untuk mengurutkan">Nama Aset <span id="sort-nama"></span></th>
+                    <th class="sortable" onclick="sortMasterTable('kategori')" style="cursor: pointer;"
+                        title="Klik untuk mengurutkan">Kategori <span id="sort-kategori"></span></th>
+                    <th class="sortable" onclick="sortMasterTable('nilai')" style="cursor: pointer;"
+                        title="Klik untuk mengurutkan">Total Nilai (Rp) <span id="sort-nilai"></span></th>
+                    <th class="sortable" onclick="sortMasterTable('porsi')" style="cursor: pointer;"
+                        title="Klik untuk mengurutkan">Porsi <span id="sort-porsi"></span></th>
+                    <th class="sortable" onclick="sortMasterTable('trend')" style="cursor: pointer;"
+                        title="Klik untuk mengurutkan">Trend <span id="sort-trend"></span></th>
+                    <th class="sortable" onclick="sortMasterTable('profit')" style="cursor: pointer;"
+                        title="Klik untuk mengurutkan">Est. Profit <span id="sort-profit"></span></th>
                     <th class="action-cell">Aksi</th>
                 </tr>
             </thead>
