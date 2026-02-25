@@ -1,4 +1,4 @@
-const CACHE_NAME = "myaset-v1";
+const CACHE_NAME = "myaset-v2";
 const urlsToCache = [
   "./",
   "./index.html",
@@ -50,3 +50,4 @@ self.addEventListener("fetch", event => {
       })
   );
 });
+
