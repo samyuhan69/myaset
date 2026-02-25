@@ -8,7 +8,7 @@ const STORAGE_KEY = 'gdrive_token_v3';
 
 // --- GLOBAL VARS ---
 let daftarAset = [];
-let riwayatLog = []; // Menyimpan riwayat transaksi
+let riwayatLog = [];
 let hargaEmasLive = 0;
 let hargaUSDLive = 16000;
 let isFetching = false;
@@ -296,7 +296,6 @@ function loadDataAset() {
                 if (isNaN(a.lot) || a.lot === null) { a.lot = 0; u = true; }
                 if (isNaN(a.berat) || a.berat === null) { a.berat = 0; u = true; }
 
-                // Pastikan Modal Awal ada di aset lama
                 if (isNaN(a.modalAwal) || a.modalAwal === null || a.modalAwal === undefined) {
                     a.modalAwal = a.nilai;
                     u = true;
@@ -317,7 +316,7 @@ function catatLog(tipe, nama, nominal) {
 
     riwayatLog.unshift({ id: Date.now(), tipe, nama, nominal, dateStr });
 
-    if (riwayatLog.length > 100) riwayatLog.pop(); // Max 100 log disimpan
+    if (riwayatLog.length > 100) riwayatLog.pop();
     localStorage.setItem('portfolio_logs_v1', JSON.stringify(riwayatLog));
 }
 
@@ -371,7 +370,6 @@ function updateTampilan() {
         a.currentTrend = getAssetTrend(a.id, a.nilai);
     });
 
-    // === LOGIKA SORTING ===
     daftarAset.sort((a, b) => {
         let valA, valB;
 
@@ -448,15 +446,16 @@ function updateTampilan() {
 
         let vis = renderTrend(a.currentTrend, a.nilai);
 
-        // --- LOGIKA PROFIT ALL-TIME (PNL) ---
+        // --- LOGIKA PROFIT ALL-TIME (PNL) DIPERBARUI AGAR TIDAK TURUN ---
         let modal = a.modalAwal || 0;
         let pnl = a.nilai - modal;
         let pnlPct = modal > 0 ? (pnl / modal) * 100 : 0;
         let pnlColor = pnl >= 0 ? 'trend-up' : 'trend-down';
         let pnlSign = pnl > 0 ? '+' : '';
-        let pnlHtml = modal > 0 ? `<span class="trend-badge ${pnlColor}">${pnlSign}${pnlPct.toFixed(2)}%</span><br><span class="${pnlColor}" style="font-size:0.8rem;">${pnlSign}${formatRupiah(pnl)}</span>` : '<span style="color:#888">-</span>';
+        // CSS display:inline-block & margin-top ditambahkan di sini
+        let pnlHtml = modal > 0 ? `<span class="trend-badge ${pnlColor}">${pnlSign}${pnlPct.toFixed(2)}%</span><br><span class="${pnlColor}" style="font-size:0.8rem; display:inline-block; margin-top:4px;">${pnlSign}${formatRupiah(pnl)}</span>` : '<span style="color:#888">-</span>';
         if (isPrivacyMode) pnlHtml = '***';
-        // ------------------------------------
+        // ---------------------------------------------------------------
 
         let det = a.subJenis;
         if (a.subJenis === 'Emas Batangan') det = `<span style="color:#ffca28">⚖️ ${a.berat.toFixed(2)}g</span>`;
