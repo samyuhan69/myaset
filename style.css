@@ -361,6 +361,15 @@ tr:last-child td {
     border-bottom: none;
 }
 
+/* FITUR BARU: Mencegah Nilai Tabel Jatuh ke Bawah/Terpotong di HP */
+table td:nth-child(3),
+table td:nth-child(5),
+table th:nth-child(5),
+table td:nth-child(6),
+table th:nth-child(6) {
+    white-space: nowrap;
+}
+
 .trend-up {
     color: var(--accent-green);
 }
@@ -723,7 +732,7 @@ tr:last-child td {
     font-size: 20px;
 }
 
-/* --- STYLE LOG RIWAYAT (BARU) --- */
+/* --- STYLE LOG RIWAYAT --- */
 .log-item { 
     background: #222; 
     padding: 12px 15px; 
