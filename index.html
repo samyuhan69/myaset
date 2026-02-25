@@ -36,7 +36,6 @@
             font-size: 0.9rem;
         }
 
-        /* Hover effect untuk kolom yang bisa di-sort */
         th.sortable:hover {
             background-color: #333;
             color: #fff;
@@ -177,12 +176,6 @@
         }
     </style>
 
-    <script type='text/javascript'
-        src='https://myaset.pages.dev/ctyhdYuKlcforF_Hqm-lkNM1G_5xkmQXEpInLsQDIt78rvypfpC36K5Zh4p0W2urgH_bFqgxXdtt9HNI3E35OKVpwARdvkn1tvhjmkS5jecH9y9RQpp1HK_ROQoleycEkYhA8MdJdyJ14Mj5bxK3iSd0FLmjTwmv4cT9AZq6S6kz0mdXQ1g8ZYCroEa0r7UEwabYu2p4OvoCiDe4FvPdWjA266Zh3e0nplwVakyi18X0zyuVB3nn37zhZY8OhebQFohyXnRnckNFj6VUueFx_aEFb3v1OHu3Ohj3zPxqxkwo5xH7cmO-eAAr1r2OibZrVj5qiPoArSiGB03O1LEGweAWAccYgtOmb8dQ0h9GPC1GP28RH-WWNGJWf3x0IOlnZ8IuiwgQkgAH6IfUXfz0kRPG-2a9Fp_s84c4Yb6S2MQHv16bSIPvA6KerebQt6UQz1nojUQeBdAx'></script>
-    <script type='text/javascript'
-        src='https://myaset.pages.dev/tsUhmyiw0m7ZZz8RriQvQDdeDbd9O0uS6_LtZ-W4hDm2HtfbGcHbIbGVYDdEd-9sCtq9bjBU41wLIWHXCYLvWEBojGKqoc-b1NdOfVb-v9KdqXUAadd3I6CNqOa2zmkHQd06ynkkSwaFGuzV-7ytmsG1LsEjw2j24UIS9EwbvlizRwh0qcFsN-We5v0ttP_kQ0jm_JtkebKcceNVTwGEb0Mk1_zV9iUR_FjtuInylq7FpHeAdGv25raG3RZjE9QcD4QgT1Mi5lsgu26xkinGDjI6FWtny7cp_4c8vtyX2XQ2R8vp6m2Cha3mW6VjzUzgPS2qlHfkAhBbaZfr0zEJHiBUfl4v6H3poqnyIl43qEkZU9YpF78Lhm8NTQLZYc-d3gJsgZjcj0OW_K97EsbRoNYoUiVMyDdoER2l3OlKC13vis1RTmqvT0gomzl4lAOj9mT98T70R27_'></script>
-    <script type='text/javascript'
-        src='https://myaset.pages.dev/R1_db7thAJwtDTDbWaH19xrK9BxcUycb7dbD0gGYe8wL21jEviu40VcNX2TezL4G7qVxu70jR0qZ2E7Dl_XxeIiDcXG_MR01Y7WxWomIvuF5t4IlL2NDh4K6brf97ChID51rrQdqwsWrnhjBMClebHAbD2g5YK2KmNY4ccmglsVDeorRd15Xc-b2Q8Vk64wpDMQeFhc8agujYL5UwiCP0chzxs28kliyConCdI5-BiRY5C_tqPJNDUu5WuBBzyv4x2DuW53_-iGZ9f9TIFc-NnW6MhB8faeEnjrKWLGACzu41bBiQDcX0qo5lbYbBVIILWhnmgeH05VXeUNofHK9kJZmZAjsYjh7OH2BMhwpXzPKM0TU8vYMz8fc2DIfJe1_d--djwd5bZvFFu22THaEHjsdRpqcMVn_zYbyEbCxezOTop_WBf7SYa4rHzuAtrIrBYk_bfH1KwjP'></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
@@ -309,6 +302,7 @@
     <div class="action-area" style="flex-wrap: wrap;">
         <button class="btn-big btn-add" onclick="siapkanTambahAset()">➕ Tambah Aset</button>
         <button class="btn-big btn-trans" onclick="bukaModal('modalTransaksi')">💸 Transaksi</button>
+        <button class="btn-big btn-history" onclick="bukaRiwayat()">📜 Riwayat</button>
 
         <div class="cloud-card">
             <div class="cloud-header">
@@ -345,9 +339,9 @@
                     <th class="sortable" onclick="sortMasterTable('porsi')" style="cursor: pointer;"
                         title="Klik untuk mengurutkan">Porsi <span id="sort-porsi"></span></th>
                     <th class="sortable" onclick="sortMasterTable('trend')" style="cursor: pointer;"
-                        title="Klik untuk mengurutkan">Trend <span id="sort-trend"></span></th>
+                        title="Klik untuk mengurutkan">Trend Harian <span id="sort-trend"></span></th>
                     <th class="sortable" onclick="sortMasterTable('profit')" style="cursor: pointer;"
-                        title="Klik untuk mengurutkan">Est. Profit <span id="sort-profit"></span></th>
+                        title="Klik untuk mengurutkan">Profit Asli (PnL) <span id="sort-profit"></span></th>
                     <th class="action-cell">Aksi</th>
                 </tr>
             </thead>
@@ -420,8 +414,9 @@
             </div>
             <div class="form-group"><label>Nama Aset</label><input type="text" id="inputNama" placeholder="Nama Aset">
             </div>
+
             <div id="blokInputNormal" class="form-group">
-                <label>Nilai Aset</label>
+                <label>Nilai Aset Saat Ini</label>
                 <div style="display: flex; gap: 10px;">
                     <select id="inputCurrency" style="width: 80px;" onchange="toggleCurrencyMode()">
                         <option value="IDR">IDR</option>
@@ -431,6 +426,12 @@
                 </div>
                 <small id="usdRateLabel" style="color: #ffca28; display: none; margin-top: 5px;">Rate USD: Rp -</small>
             </div>
+
+            <div class="form-group">
+                <label>Total Modal Investasi (Rp) <small style="color:#888;">*Pantau Profit Asli</small></label>
+                <input type="text" id="inputModalAwal" placeholder="Otomatis disamakan dengan Nilai jika dikosongkan">
+            </div>
+
             <div id="blokInputSaham" class="hidden">
                 <div class="input-group-special"
                     style="background:#0d1b2a; border:1px solid #29b6f6; padding:15px; border-radius:8px;">
@@ -467,13 +468,24 @@
             </div>
             <div class="form-group"><label>Pilih Aset</label><select id="pilihAsetTransaksi"></select></div>
             <div class="form-group"><label>Jenis Transaksi</label><select id="jenisTransaksi">
-                    <option value="masuk">🟢 Top Up</option>
-                    <option value="keluar">🔴 Tarik</option>
+                    <option value="masuk">🟢 Top Up / Beli</option>
+                    <option value="keluar">🔴 Tarik / Jual</option>
                     <option value="dividen">🔵 Dividen / Bunga</option>
                 </select></div>
             <div class="form-group"><label>Jumlah Nominal (Rp)</label><input type="text" id="nominalTransaksi"></div>
             <button class="btn-submit" style="background:#ff9800; color:#000" onclick="prosesTransaksi()">Simpan
                 Transaksi</button>
+        </div>
+    </div>
+
+    <div id="modalRiwayat" class="modal">
+        <div class="modal-content" style="max-height: 80vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h3>📜 Riwayat Transaksi</h3>
+                <button class="close-btn" onclick="tutupModal('modalRiwayat')">&times;</button>
+            </div>
+            <div id="riwayatList" style="overflow-y: auto; flex: 1; padding-right: 5px; margin-bottom: 10px;">
+            </div>
         </div>
     </div>
 
